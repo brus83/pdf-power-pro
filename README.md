@@ -1,73 +1,115 @@
-# Welcome to your Lovable project
+# Universal File Converter Pro
 
-## Project info
+Un'applicazione web avanzata per la conversione di file, traduzione automatica e riassunto di documenti.
 
-**URL**: https://lovable.dev/projects/20371c6c-8fae-4a50-a042-dafda087497e
+## Funzionalità
 
-## How can I edit this code?
+- **Conversione File**: Converti tra diversi formati (PDF, Word, Testo, HTML, CSV, JSON, XML)
+- **Traduzione Automatica**: Traduci documenti in multiple lingue
+- **Riassunto Intelligente**: Genera riassunti automatici dei documenti
 
-There are several ways of editing your application.
+## Setup per Funzionalità Reali
 
-**Use Lovable**
+### 1. Configurazione Supabase
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/20371c6c-8fae-4a50-a042-dafda087497e) and start prompting.
+1. Crea un account su [Supabase](https://supabase.com)
+2. Crea un nuovo progetto
+3. Copia le credenziali del progetto
+4. Crea un file `.env` nella root del progetto:
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```env
+VITE_SUPABASE_URL=your_supabase_url_here
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 ```
 
-**Edit a file directly in GitHub**
+### 2. Deploy delle Edge Functions
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Installa Supabase CLI e fai il deploy delle funzioni:
 
-**Use GitHub Codespaces**
+```bash
+# Installa Supabase CLI
+npm install -g supabase
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+# Login a Supabase
+supabase login
 
-## What technologies are used for this project?
+# Collega il progetto
+supabase link --project-ref your-project-ref
 
-This project is built with:
+# Deploy delle funzioni
+supabase functions deploy convert-file
+supabase functions deploy translate-document
+supabase functions deploy summarize-document
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### 3. API Keys per Servizi Esterni
 
-## How can I deploy this project?
+#### CloudConvert (Conversione File)
+1. Registrati su [CloudConvert](https://cloudconvert.com)
+2. Ottieni la tua API key gratuita
+3. Sostituisci `YOUR_CLOUDCONVERT_API_KEY` nelle edge functions
 
-Simply open [Lovable](https://lovable.dev/projects/20371c6c-8fae-4a50-a042-dafda087497e) and click on Share -> Publish.
+#### MyMemory (Traduzione)
+- MyMemory offre traduzione gratuita senza API key
+- Limite: 5000 caratteri per richiesta
 
-## Can I connect a custom domain to my Lovable project?
+### 4. Formati Supportati
 
-Yes, you can!
+**Conversione Completa (con CloudConvert):**
+- PDF, Word, PowerPoint, Excel
+- Immagini (JPG, PNG, GIF)
+- Video e Audio
+- Archivi (ZIP, RAR)
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+**Conversione Semplificata (implementata):**
+- Testo (.txt)
+- HTML (.html)
+- CSV (.csv)
+- JSON (.json)
+- XML (.xml)
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+## Sviluppo Locale
+
+```bash
+# Installa dipendenze
+npm install
+
+# Avvia il server di sviluppo
+npm run dev
+
+# Avvia Supabase localmente (opzionale)
+supabase start
+```
+
+## Limitazioni Attuali
+
+- **Conversione**: Funziona solo per formati di testo senza CloudConvert API
+- **Traduzione**: Limitata a 5000 caratteri per documento
+- **Riassunto**: Algoritmo semplificato, non AI-powered
+
+## Miglioramenti Futuri
+
+1. **Integrazione AI**: OpenAI GPT per riassunti più intelligenti
+2. **OCR**: Estrazione testo da immagini e PDF scansionati
+3. **Batch Processing**: Elaborazione di più file contemporaneamente
+4. **Cloud Storage**: Salvataggio permanente dei file convertiti
+5. **Autenticazione**: Sistema di login per salvare la cronologia
+
+## Tecnologie Utilizzate
+
+- **Frontend**: React, TypeScript, Tailwind CSS, shadcn/ui
+- **Backend**: Supabase Edge Functions
+- **APIs**: CloudConvert, MyMemory Translation
+- **Build Tool**: Vite
+
+## Contribuire
+
+1. Fork del repository
+2. Crea un branch per la tua feature
+3. Commit delle modifiche
+4. Push al branch
+5. Apri una Pull Request
+
+## Licenza
+
+MIT License - vedi il file LICENSE per i dettagli.

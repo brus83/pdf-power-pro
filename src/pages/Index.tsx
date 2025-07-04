@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { Upload, FileText, Languages, Sparkles, Download, Copy, RefreshCw } from 'lucide-react';
+import { Upload, FileText, Languages, Sparkles, Download, Copy, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
+import { convertFile, translateDocument, summarizeDocument } from '@/services/fileService';
+import { downloadFile } from '@/lib/fileUtils';
 
 const Index = () => {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -14,23 +17,30 @@ const Index = () => {
   const [translation, setTranslation] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('');
   const [targetFormat, setTargetFormat] = useState('');
-  const [convertedFile, setConvertedFile] = useState<string | null>(null);
+  const [convertedFileUrl, setConvertedFileUrl] = useState<string | null>(null);
+  const [convertedFileName, setConvertedFileName] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const supportedFormats = [
     { value: 'pdf', label: 'PDF', accept: '.pdf' },
     { value: 'docx', label: 'Word (.docx)', accept: '.docx,.doc' },
-    { value: 'pptx', label: 'PowerPoint (.pptx)', accept: '.pptx,.ppt' },
-    { value: 'xlsx', label: 'Excel (.xlsx)', accept: '.xlsx,.xls' },
     { value: 'txt', label: 'Testo (.txt)', accept: '.txt' },
-    { value: 'rtf', label: 'Rich Text (.rtf)', accept: '.rtf' },
-    { value: 'odt', label: 'OpenDocument Text (.odt)', accept: '.odt' },
-    { value: 'ods', label: 'OpenDocument Spreadsheet (.ods)', accept: '.ods' },
-    { value: 'odp', label: 'OpenDocument Presentation (.odp)', accept: '.odp' },
     { value: 'html', label: 'HTML (.html)', accept: '.html,.htm' },
-    { value: 'epub', label: 'eBook (.epub)', accept: '.epub' },
     { value: 'csv', label: 'CSV (.csv)', accept: '.csv' },
     { value: 'json', label: 'JSON (.json)', accept: '.json' },
     { value: 'xml', label: 'XML (.xml)', accept: '.xml' }
+  ];
+
+  const languages = [
+    { value: 'it', label: 'Italiano' },
+    { value: 'en', label: 'Inglese' },
+    { value: 'es', label: 'Spagnolo' },
+    { value: 'fr', label: 'Francese' },
+    { value: 'de', label: 'Tedesco' },
+    { value: 'pt', label: 'Portoghese' },
+    { value: 'ru', label: 'Russo' },
+    { value: 'zh', label: 'Cinese' },
+    { value: 'ja', label: 'Giapponese' }
   ];
 
   const allAcceptedFormats = supportedFormats.map(f => f.accept).join(',');
@@ -48,6 +58,11 @@ const Index = () => {
       const fileType = getFileType(file.name);
       if (fileType !== 'unknown') {
         setUploadedFile(file);
+        setError(null);
+        setConvertedFileUrl(null);
+        setConvertedFileName(null);
+        setSummary('');
+        setTranslation('');
         toast({
           title: "File caricato con successo!",
           description: `File: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`,
@@ -74,6 +89,7 @@ const Index = () => {
       const fileType = getFileType(file.name);
       if (fileType !== 'unknown') {
         setUploadedFile(file);
+        setError(null);
         toast({
           title: "File caricato con successo!",
           description: `File: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`,
@@ -82,24 +98,7 @@ const Index = () => {
     }
   };
 
-  const simulateProcessing = async (action: string) => {
-    setIsProcessing(true);
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    setIsProcessing(false);
-    
-    if (action === 'summary') {
-      setSummary("Questo è un riassunto simulato del documento caricato. Il documento tratta di tecnologie innovative nel settore dell'intelligenza artificiale, con particolare focus su applicazioni pratiche nel business moderno. Include analisi di mercato, case studies e proiezioni future per il prossimo quinquennio.");
-    } else if (action === 'translation') {
-      setTranslation("This is a simulated translation of the uploaded document. The document discusses innovative technologies in the artificial intelligence sector, with particular focus on practical applications in modern business. It includes market analysis, case studies and future projections for the next five years.");
-    }
-    
-    toast({
-      title: "Operazione completata!",
-      description: `${action} eseguito con successo`,
-    });
-  };
-
-  const handleConvert = () => {
+  const handleConvert = async () => {
     if (!uploadedFile || !targetFormat) {
       toast({
         title: "Errore",
@@ -109,45 +108,157 @@ const Index = () => {
       return;
     }
 
-    const sourceFormat = getFileType(uploadedFile.name);
-    const targetFormatLabel = supportedFormats.find(f => f.value === targetFormat)?.label;
-    
     setIsProcessing(true);
+    setError(null);
     
     toast({
-      title: `Conversione avviata`,
-      description: `Convertendo da ${sourceFormat.toUpperCase()} a ${targetFormatLabel}...`,
+      title: "Conversione avviata",
+      description: "Stiamo convertendo il tuo file...",
     });
 
-    // Simula il processo di conversione
-    setTimeout(() => {
-      setIsProcessing(false);
-      const fileName = uploadedFile.name.split('.')[0];
-      const extension = supportedFormats.find(f => f.value === targetFormat)?.accept.split(',')[0].replace('.', '');
-      setConvertedFile(`${fileName}_converted.${extension}`);
+    try {
+      const result = await convertFile(uploadedFile, targetFormat);
       
+      if (result.success && result.downloadUrl && result.filename) {
+        setConvertedFileUrl(result.downloadUrl);
+        setConvertedFileName(result.filename);
+        toast({
+          title: "Conversione completata!",
+          description: `File convertito con successo`,
+        });
+      } else {
+        setError(result.error || 'Errore durante la conversione');
+        toast({
+          title: "Errore conversione",
+          description: result.error || 'Errore durante la conversione',
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Errore sconosciuto';
+      setError(errorMessage);
       toast({
-        title: "Conversione completata!",
-        description: `File convertito in ${targetFormatLabel} con successo`,
+        title: "Errore",
+        description: errorMessage,
+        variant: "destructive",
       });
-    }, 3000);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const handleDownload = () => {
-    if (convertedFile) {
-      // Simula il download del file
+  const handleDownload = async () => {
+    if (convertedFileUrl && convertedFileName) {
+      try {
+        if (convertedFileUrl.startsWith('data:')) {
+          // File base64
+          const response = await fetch(convertedFileUrl);
+          const blob = await response.blob();
+          downloadFile(blob, convertedFileName);
+        } else {
+          // URL esterno
+          const response = await fetch(convertedFileUrl);
+          const blob = await response.blob();
+          downloadFile(blob, convertedFileName);
+        }
+        
+        toast({
+          title: "Download completato",
+          description: `File ${convertedFileName} scaricato`,
+        });
+      } catch (error) {
+        toast({
+          title: "Errore download",
+          description: "Impossibile scaricare il file",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  const handleTranslate = async () => {
+    if (!uploadedFile || !selectedLanguage) {
       toast({
-        title: "Download avviato",
-        description: `Scaricando ${convertedFile}...`,
+        title: "Errore",
+        description: "Per favore carica un file e seleziona la lingua",
+        variant: "destructive",
       });
+      return;
+    }
+
+    setIsProcessing(true);
+    setError(null);
+
+    try {
+      const result = await translateDocument(uploadedFile, selectedLanguage);
       
-      // In una implementazione reale, qui ci sarebbe la logica per scaricare il file
-      const link = document.createElement('a');
-      link.href = '#'; // URL del file convertito
-      link.download = convertedFile;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      if (result.success && result.translatedText) {
+        setTranslation(result.translatedText);
+        toast({
+          title: "Traduzione completata!",
+          description: "Documento tradotto con successo",
+        });
+      } else {
+        setError(result.error || 'Errore durante la traduzione');
+        toast({
+          title: "Errore traduzione",
+          description: result.error || 'Errore durante la traduzione',
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Errore sconosciuto';
+      setError(errorMessage);
+      toast({
+        title: "Errore",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSummarize = async () => {
+    if (!uploadedFile) {
+      toast({
+        title: "Errore",
+        description: "Per favore carica un file",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+    setError(null);
+
+    try {
+      const result = await summarizeDocument(uploadedFile);
+      
+      if (result.success && result.summary) {
+        setSummary(result.summary);
+        toast({
+          title: "Riassunto completato!",
+          description: "Documento riassunto con successo",
+        });
+      } else {
+        setError(result.error || 'Errore durante il riassunto');
+        toast({
+          title: "Errore riassunto",
+          description: result.error || 'Errore durante il riassunto',
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Errore sconosciuto';
+      setError(errorMessage);
+      toast({
+        title: "Errore",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -189,6 +300,30 @@ const Index = () => {
       </div>
 
       <div className="container mx-auto px-4 py-8 max-w-6xl">
+        {/* Setup Notice */}
+        <Alert className="mb-6 border-blue-200 bg-blue-50">
+          <AlertCircle className="h-4 w-4 text-blue-600" />
+          <AlertDescription className="text-blue-800">
+            <strong>Configurazione richiesta:</strong> Per utilizzare le funzionalità reali, configura Supabase e le API keys.
+            <br />
+            1. Crea un progetto Supabase
+            <br />
+            2. Configura le Edge Functions
+            <br />
+            3. Ottieni API keys per CloudConvert (conversione) e MyMemory (traduzione)
+          </AlertDescription>
+        </Alert>
+
+        {/* Error Display */}
+        {error && (
+          <Alert className="mb-6 border-red-200 bg-red-50">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800">
+              {error}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Upload Section */}
         <Card className="mb-8 shadow-lg border-0 bg-white/80 backdrop-blur-sm">
           <CardHeader>
@@ -197,7 +332,7 @@ const Index = () => {
               Carica il tuo file
             </CardTitle>
             <CardDescription>
-              Supporta PDF, Word, PowerPoint, Excel, Testo, HTML, eBook e molti altri formati
+              Supporta PDF, Word, Testo, HTML, CSV, JSON, XML
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -214,12 +349,12 @@ const Index = () => {
               <p className="text-sm text-gray-500 mb-2">
                 {uploadedFile 
                   ? `Dimensione: ${(uploadedFile.size / 1024 / 1024).toFixed(2)} MB - Tipo: ${getFileType(uploadedFile.name).toUpperCase()}`
-                  : 'Formati supportati: PDF, DOCX, PPTX, XLSX, TXT, RTF, ODT, HTML, EPUB e altri'
+                  : 'Formati supportati: PDF, DOCX, TXT, HTML, CSV, JSON, XML'
                 }
               </p>
               {uploadedFile && (
                 <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg inline-block">
-                  <p className="text-green-700 text-sm font-medium">✓ File caricato e pronto per la conversione</p>
+                  <p className="text-green-700 text-sm font-medium">✓ File caricato e pronto per l'elaborazione</p>
                 </div>
               )}
               <input
@@ -256,10 +391,10 @@ const Index = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-blue-600">
                   <RefreshCw className="h-5 w-5" />
-                  Conversione Universale
+                  Conversione File
                 </CardTitle>
                 <CardDescription>
-                  Converti il tuo file in qualsiasi formato supportato
+                  Converti il tuo file in un altro formato
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -298,18 +433,6 @@ const Index = () => {
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-gray-800">Formati supportati:</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                    {supportedFormats.map((format) => (
-                      <div key={format.value} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
-                        <FileText className="h-3 w-3 text-gray-600" />
-                        <span>{format.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
                 <div className="flex gap-4">
                   <Button 
                     onClick={handleConvert}
@@ -329,24 +452,24 @@ const Index = () => {
                     )}
                   </Button>
 
-                  {convertedFile && (
+                  {convertedFileUrl && convertedFileName && (
                     <Button 
                       onClick={handleDownload}
                       variant="outline"
                       className="flex items-center gap-2"
                     >
                       <Download className="h-4 w-4" />
-                      Scarica {convertedFile}
+                      Scarica {convertedFileName}
                     </Button>
                   )}
                 </div>
 
-                {convertedFile && (
+                {convertedFileUrl && convertedFileName && (
                   <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                       <p className="text-green-700 font-medium">
-                        File convertito con successo: {convertedFile}
+                        File convertito con successo: {convertedFileName}
                       </p>
                     </div>
                   </div>
@@ -369,11 +492,18 @@ const Index = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <Button 
-                  onClick={() => simulateProcessing('summary')}
+                  onClick={handleSummarize}
                   disabled={!uploadedFile || isProcessing}
                   className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
                 >
-                  {isProcessing ? 'Analisi in corso...' : 'Genera Riassunto'}
+                  {isProcessing ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Analisi in corso...
+                    </>
+                  ) : (
+                    'Genera Riassunto'
+                  )}
                 </Button>
                 
                 {summary && (
@@ -417,25 +547,28 @@ const Index = () => {
                         <SelectValue placeholder="Seleziona lingua" />
                       </SelectTrigger>
                       <SelectContent className="bg-white">
-                        <SelectItem value="it">Italiano</SelectItem>
-                        <SelectItem value="en">Inglese</SelectItem>
-                        <SelectItem value="es">Spagnolo</SelectItem>
-                        <SelectItem value="fr">Francese</SelectItem>
-                        <SelectItem value="de">Tedesco</SelectItem>
-                        <SelectItem value="pt">Portoghese</SelectItem>
-                        <SelectItem value="ru">Russo</SelectItem>
-                        <SelectItem value="zh">Cinese</SelectItem>
-                        <SelectItem value="ja">Giapponese</SelectItem>
+                        {languages.map((lang) => (
+                          <SelectItem key={lang.value} value={lang.value}>
+                            {lang.label}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="flex items-end">
                     <Button 
-                      onClick={() => simulateProcessing('translation')}
+                      onClick={handleTranslate}
                       disabled={!uploadedFile || !selectedLanguage || isProcessing}
                       className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
                     >
-                      {isProcessing ? 'Traduzione...' : 'Traduci'}
+                      {isProcessing ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Traduzione...
+                        </>
+                      ) : (
+                        'Traduci'
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -452,13 +585,6 @@ const Index = () => {
                         >
                           <Copy className="h-4 w-4 mr-2" />
                           Copia
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                        >
-                          <Download className="h-4 w-4 mr-2" />
-                          Esporta
                         </Button>
                       </div>
                     </div>

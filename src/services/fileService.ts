@@ -1,0 +1,121 @@
+import { supabase } from '@/lib/supabase';
+import { convertFileToBase64 } from '@/lib/fileUtils';
+
+export interface ConversionResult {
+  success: boolean;
+  downloadUrl?: string;
+  filename?: string;
+  error?: string;
+}
+
+export interface TranslationResult {
+  success: boolean;
+  translatedText?: string;
+  error?: string;
+}
+
+export interface SummaryResult {
+  success: boolean;
+  summary?: string;
+  error?: string;
+}
+
+export const convertFile = async (
+  file: File, 
+  targetFormat: string
+): Promise<ConversionResult> => {
+  try {
+    const base64Content = await convertFileToBase64(file);
+    
+    const { data, error } = await supabase.functions.invoke('convert-file', {
+      body: {
+        fileContent: base64Content,
+        fileName: file.name,
+        sourceFormat: file.type,
+        targetFormat: targetFormat,
+        fileSize: file.size
+      }
+    });
+
+    if (error) {
+      console.error('Conversion error:', error);
+      return { success: false, error: error.message };
+    }
+
+    return {
+      success: true,
+      downloadUrl: data.downloadUrl,
+      filename: data.filename
+    };
+  } catch (error) {
+    console.error('File conversion failed:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Conversione fallita' 
+    };
+  }
+};
+
+export const translateDocument = async (
+  file: File, 
+  targetLanguage: string
+): Promise<TranslationResult> => {
+  try {
+    const base64Content = await convertFileToBase64(file);
+    
+    const { data, error } = await supabase.functions.invoke('translate-document', {
+      body: {
+        fileContent: base64Content,
+        fileName: file.name,
+        fileType: file.type,
+        targetLanguage: targetLanguage
+      }
+    });
+
+    if (error) {
+      console.error('Translation error:', error);
+      return { success: false, error: error.message };
+    }
+
+    return {
+      success: true,
+      translatedText: data.translatedText
+    };
+  } catch (error) {
+    console.error('Translation failed:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Traduzione fallita' 
+    };
+  }
+};
+
+export const summarizeDocument = async (file: File): Promise<SummaryResult> => {
+  try {
+    const base64Content = await convertFileToBase64(file);
+    
+    const { data, error } = await supabase.functions.invoke('summarize-document', {
+      body: {
+        fileContent: base64Content,
+        fileName: file.name,
+        fileType: file.type
+      }
+    });
+
+    if (error) {
+      console.error('Summary error:', error);
+      return { success: false, error: error.message };
+    }
+
+    return {
+      success: true,
+      summary: data.summary
+    };
+  } catch (error) {
+    console.error('Summarization failed:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Riassunto fallito' 
+    };
+  }
+};
