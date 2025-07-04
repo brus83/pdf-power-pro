@@ -1,8 +1,7 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 }
 
 interface ConversionRequest {
@@ -13,7 +12,7 @@ interface ConversionRequest {
   fileSize: number;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -32,10 +31,10 @@ serve(async (req) => {
       )
     }
 
-    // Limite dimensione file (10MB)
-    if (fileSize > 10 * 1024 * 1024) {
+    // Limite dimensione file (50MB per supportare PowerPoint)
+    if (fileSize > 50 * 1024 * 1024) {
       return new Response(
-        JSON.stringify({ error: 'File troppo grande. Limite: 10MB' }),
+        JSON.stringify({ error: 'File troppo grande. Limite: 50MB' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -61,7 +60,16 @@ serve(async (req) => {
             operation: 'convert',
             input: 'import-file',
             output_format: targetFormat,
-            depends_on: ['import-file']
+            depends_on: ['import-file'],
+            // Opzioni specifiche per PowerPoint
+            ...(targetFormat === 'pptx' && {
+              engine: 'office',
+              optimize_print: false
+            }),
+            // Opzioni specifiche per Excel
+            ...(targetFormat === 'xlsx' && {
+              engine: 'office'
+            })
           },
           'export-file': {
             operation: 'export/url',
@@ -91,7 +99,7 @@ serve(async (req) => {
       }
       
       return new Response(
-        JSON.stringify({ error: 'Servizio di conversione temporaneamente non disponibile' }),
+        JSON.stringify({ error: 'Servizio di conversione temporaneamente non disponibile. Per conversioni complete, configura CloudConvert API.' }),
         { 
           status: 503, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -104,10 +112,10 @@ serve(async (req) => {
     // Attendi completamento job
     let jobStatus = 'waiting'
     let attempts = 0
-    const maxAttempts = 30
+    const maxAttempts = 60 // Aumentato per file più grandi come PowerPoint
     
     while (jobStatus !== 'finished' && attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      await new Promise(resolve => setTimeout(resolve, 3000)) // Aumentato intervallo
       
       const statusResponse = await fetch(`https://api.cloudconvert.com/v2/jobs/${jobData.data.id}`, {
         headers: {
@@ -118,11 +126,22 @@ serve(async (req) => {
       const statusData = await statusResponse.json()
       jobStatus = statusData.data.status
       attempts++
+      
+      // Se il job fallisce
+      if (jobStatus === 'error') {
+        return new Response(
+          JSON.stringify({ error: 'Errore durante la conversione del file' }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
     }
 
     if (jobStatus !== 'finished') {
       return new Response(
-        JSON.stringify({ error: 'Timeout durante la conversione' }),
+        JSON.stringify({ error: 'Timeout durante la conversione. Il file potrebbe essere troppo grande o complesso.' }),
         { 
           status: 408, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -169,7 +188,11 @@ function getContentType(format: string): string {
     'html': 'text/html',
     'csv': 'text/csv',
     'json': 'application/json',
-    'xml': 'application/xml'
+    'xml': 'application/xml',
+    'pdf': 'application/pdf',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   }
   return contentTypes[format] || 'application/octet-stream'
 }
@@ -195,6 +218,10 @@ async function simpleTextConversion(content: string, sourceFormat: string, targe
   } else if (sourceFormat === 'text/html' && targetFormat === 'txt') {
     // Rimuovi tag HTML (conversione molto semplice)
     convertedContent = decodedContent.replace(/<[^>]*>/g, '')
+  } else if (targetFormat === 'csv') {
+    // Conversione semplice a CSV
+    const lines = decodedContent.split('\n')
+    convertedContent = lines.map(line => `"${line.replace(/"/g, '""')}"`).join('\n')
   }
   
   // Ricodifica in base64

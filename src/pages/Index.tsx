@@ -24,6 +24,8 @@ const Index = () => {
   const supportedFormats = [
     { value: 'pdf', label: 'PDF', accept: '.pdf' },
     { value: 'docx', label: 'Word (.docx)', accept: '.docx,.doc' },
+    { value: 'pptx', label: 'PowerPoint (.pptx)', accept: '.pptx,.ppt' },
+    { value: 'xlsx', label: 'Excel (.xlsx)', accept: '.xlsx,.xls' },
     { value: 'txt', label: 'Testo (.txt)', accept: '.txt' },
     { value: 'html', label: 'HTML (.html)', accept: '.html,.htm' },
     { value: 'csv', label: 'CSV (.csv)', accept: '.csv' },
@@ -279,18 +281,13 @@ const Index = () => {
       <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200/50">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-3">
-              <img 
-                src="/lovable-uploads/d1822e4f-1839-4093-bba2-d979e6d6be22.png" 
-                alt="NAU Logo" 
-                className="h-10 w-auto"
-              />
-              <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-2 rounded-lg">
-                <RefreshCw className="h-6 w-6 text-white" />
-              </div>
-            </div>
+            <img 
+              src="/lovable-uploads/d1822e4f-1839-4093-bba2-d979e6d6be22.png" 
+              alt="NAU Logo" 
+              className="h-12 w-auto"
+            />
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <h1 className="text-2xl font-bold text-gray-800">
                 Universal File Converter Pro
               </h1>
               <p className="text-sm text-gray-600">Converti, Riassumi, Traduci qualsiasi formato</p>
@@ -332,7 +329,7 @@ const Index = () => {
               Carica il tuo file
             </CardTitle>
             <CardDescription>
-              Supporta PDF, Word, Testo, HTML, CSV, JSON, XML
+              Supporta PDF, Word, PowerPoint, Excel, Testo, HTML, CSV, JSON, XML
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -349,7 +346,7 @@ const Index = () => {
               <p className="text-sm text-gray-500 mb-2">
                 {uploadedFile 
                   ? `Dimensione: ${(uploadedFile.size / 1024 / 1024).toFixed(2)} MB - Tipo: ${getFileType(uploadedFile.name).toUpperCase()}`
-                  : 'Formati supportati: PDF, DOCX, TXT, HTML, CSV, JSON, XML'
+                  : 'Formati supportati: PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, JSON, XML'
                 }
               </p>
               {uploadedFile && (
@@ -436,7 +433,7 @@ const Index = () => {
                 <div className="flex gap-4">
                   <Button 
                     onClick={handleConvert}
-                    className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                    className="flex-1 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
                     disabled={!uploadedFile || !targetFormat || isProcessing}
                   >
                     {isProcessing ? (
