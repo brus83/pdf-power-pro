@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Upload, FileText, Languages, Sparkles, Download, Copy, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,6 +14,7 @@ const Index = () => {
   const [translation, setTranslation] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('');
   const [targetFormat, setTargetFormat] = useState('');
+  const [convertedFile, setConvertedFile] = useState<string | null>(null);
 
   const supportedFormats = [
     { value: 'pdf', label: 'PDF', accept: '.pdf' },
@@ -112,6 +112,8 @@ const Index = () => {
     const sourceFormat = getFileType(uploadedFile.name);
     const targetFormatLabel = supportedFormats.find(f => f.value === targetFormat)?.label;
     
+    setIsProcessing(true);
+    
     toast({
       title: `Conversione avviata`,
       description: `Convertendo da ${sourceFormat.toUpperCase()} a ${targetFormatLabel}...`,
@@ -119,11 +121,34 @@ const Index = () => {
 
     // Simula il processo di conversione
     setTimeout(() => {
+      setIsProcessing(false);
+      const fileName = uploadedFile.name.split('.')[0];
+      const extension = supportedFormats.find(f => f.value === targetFormat)?.accept.split(',')[0].replace('.', '');
+      setConvertedFile(`${fileName}_converted.${extension}`);
+      
       toast({
         title: "Conversione completata!",
         description: `File convertito in ${targetFormatLabel} con successo`,
       });
     }, 3000);
+  };
+
+  const handleDownload = () => {
+    if (convertedFile) {
+      // Simula il download del file
+      toast({
+        title: "Download avviato",
+        description: `Scaricando ${convertedFile}...`,
+      });
+      
+      // In una implementazione reale, qui ci sarebbe la logica per scaricare il file
+      const link = document.createElement('a');
+      link.href = '#'; // URL del file convertito
+      link.download = convertedFile;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const copyToClipboard = (text: string) => {
@@ -143,8 +168,15 @@ const Index = () => {
       <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200/50">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center gap-3">
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-2 rounded-lg">
-              <RefreshCw className="h-6 w-6 text-white" />
+            <div className="flex items-center gap-3">
+              <img 
+                src="/lovable-uploads/d1822e4f-1839-4093-bba2-d979e6d6be22.png" 
+                alt="NAU Logo" 
+                className="h-10 w-auto"
+              />
+              <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-2 rounded-lg">
+                <RefreshCw className="h-6 w-6 text-white" />
+              </div>
             </div>
             <div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
@@ -278,23 +310,47 @@ const Index = () => {
                   </div>
                 </div>
 
-                <Button 
-                  onClick={handleConvert}
-                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
-                  disabled={!uploadedFile || !targetFormat || isProcessing}
-                >
-                  {isProcessing ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Conversione in corso...
-                    </>
-                  ) : (
-                    <>
-                      <Download className="h-4 w-4 mr-2" />
-                      Converti File
-                    </>
+                <div className="flex gap-4">
+                  <Button 
+                    onClick={handleConvert}
+                    className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+                    disabled={!uploadedFile || !targetFormat || isProcessing}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        Conversione in corso...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Converti File
+                      </>
+                    )}
+                  </Button>
+
+                  {convertedFile && (
+                    <Button 
+                      onClick={handleDownload}
+                      variant="outline"
+                      className="flex items-center gap-2"
+                    >
+                      <Download className="h-4 w-4" />
+                      Scarica {convertedFile}
+                    </Button>
                   )}
-                </Button>
+                </div>
+
+                {convertedFile && (
+                  <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <p className="text-green-700 font-medium">
+                        File convertito con successo: {convertedFile}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -361,6 +417,7 @@ const Index = () => {
                         <SelectValue placeholder="Seleziona lingua" />
                       </SelectTrigger>
                       <SelectContent className="bg-white">
+                        <SelectItem value="it">Italiano</SelectItem>
                         <SelectItem value="en">Inglese</SelectItem>
                         <SelectItem value="es">Spagnolo</SelectItem>
                         <SelectItem value="fr">Francese</SelectItem>
