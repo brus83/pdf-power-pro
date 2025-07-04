@@ -42,11 +42,11 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Conversione usando CloudConvert API (gratuita)
+    // Conversione usando CloudConvert API con la tua chiave
     const cloudConvertResponse = await fetch('https://api.cloudconvert.com/v2/jobs', {
       method: 'POST',
       headers: {
-        'Authorization': 'Bearer YOUR_CLOUDCONVERT_API_KEY', // Sostituisci con la tua API key
+        'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiNjVhNGM2YWE5YmIwYjEyM2I0N2NlMGE2NGVmZjM3Mjk5NmVhODE0NWE3NmMzNGM4YmNmY2U1YzhlMjE2ZDg0MDM5YmExZDkxYTI3YjY5MDkiLCJpYXQiOjE3NTE2MTkxOTYuMTQ4NzYyLCJuYmYiOjE3NTE2MTkxOTYuMTQ4NzYzLCJleHAiOjQ5MDcyOTI3OTYuMTQ1MDUsInN1YiI6IjcyMzU5MTU3Iiwic2NvcGVzIjpbInVzZXIucmVhZCIsInVzZXIud3JpdGUiLCJ0YXNrLnJlYWQiLCJ0YXNrLndyaXRlIiwid2ViaG9vay5yZWFkIiwid2ViaG9vay53cml0ZSIsInByZXNldC5yZWFkIiwicHJlc2V0LndyaXRlIl19.Pd2a-uu3GtejiaUh9UwIXQFrLUPhtY9OoIpklfbMxH_LF-HnSSej6DNrv9aqbnt6i2EODxWF5cBM_9PcH8DgtGE1E6O2AJU_UEK9j5g2DJ8cnYxSQOIgPDYgrTt18OoF-9-KX3qh6lF8BAhMgLzXYgNJL5nxWosBm79w1QpPHnPyQBJIw53QbcKr7KeE-GP-KY189L4tnoE5GUrOM59oNmh8wucC2JoVcewGQcI68tkL_nm6ahWL2wt4fifzKrK6JUceb9ysuvG6qPT3JA5-nZpqAw8j_nS5PCogTOLkra0GsCH6_ErsurRJknbiEWpOjIrwZz9k0HGsq8ZJP07_FpOsvHVIo7wjkR4fMxJJo3v_Q-QhY3QwAVHoOb_WjY5b2VI6GQi2XkGzF9tsnFoiInVxOq_cMLyp4IZyEpoHBRhwyP1KOXInSddSVaBH4jrZc-t2ogv09LVdIpRg-CIzL8bsI5Rxq5UeWEwIQIRDWPkVtX7AKP1skoboHLn9D9DNJdI_VgU8_xs20XFcmSzzuZRUz7ZmD-AUbJ8cGq7yRWjLwytD6LiybjkU92fiyeM9DS38jOG3AlayEWPf6rhF49grphjSt6QWhvZq8ny-srT-AFEw6WjO06iczODNyZ9wsYME1KyUqXrq7qESCLnaRftSvQU-83mJvYjOJq5G78E',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -69,6 +69,10 @@ Deno.serve(async (req) => {
             // Opzioni specifiche per Excel
             ...(targetFormat === 'xlsx' && {
               engine: 'office'
+            }),
+            // Opzioni specifiche per PDF
+            ...(targetFormat === 'pdf' && {
+              engine: 'office'
             })
           },
           'export-file': {
@@ -81,6 +85,9 @@ Deno.serve(async (req) => {
     })
 
     if (!cloudConvertResponse.ok) {
+      const errorData = await cloudConvertResponse.json().catch(() => ({}))
+      console.error('CloudConvert API Error:', errorData)
+      
       // Fallback: conversione semplificata per formati di testo
       if (isTextFormat(sourceFormat) && isTextFormat(targetFormat)) {
         const convertedContent = await simpleTextConversion(fileContent, sourceFormat, targetFormat)
@@ -99,7 +106,9 @@ Deno.serve(async (req) => {
       }
       
       return new Response(
-        JSON.stringify({ error: 'Servizio di conversione temporaneamente non disponibile. Per conversioni complete, configura CloudConvert API.' }),
+        JSON.stringify({ 
+          error: `Errore CloudConvert: ${errorData.message || 'Servizio temporaneamente non disponibile'}` 
+        }),
         { 
           status: 503, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -108,35 +117,40 @@ Deno.serve(async (req) => {
     }
 
     const jobData = await cloudConvertResponse.json()
+    console.log('CloudConvert Job Created:', jobData.data.id)
     
     // Attendi completamento job
     let jobStatus = 'waiting'
     let attempts = 0
     const maxAttempts = 60 // Aumentato per file più grandi come PowerPoint
     
-    while (jobStatus !== 'finished' && attempts < maxAttempts) {
+    while (jobStatus !== 'finished' && jobStatus !== 'error' && attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 3000)) // Aumentato intervallo
       
       const statusResponse = await fetch(`https://api.cloudconvert.com/v2/jobs/${jobData.data.id}`, {
         headers: {
-          'Authorization': 'Bearer YOUR_CLOUDCONVERT_API_KEY'
+          'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiNjVhNGM2YWE5YmIwYjEyM2I0N2NlMGE2NGVmZjM3Mjk5NmVhODE0NWE3NmMzNGM4YmNmY2U1YzhlMjE2ZDg0MDM5YmExZDkxYTI3YjY5MDkiLCJpYXQiOjE3NTE2MTkxOTYuMTQ4NzYyLCJuYmYiOjE3NTE2MTkxOTYuMTQ4NzYzLCJleHAiOjQ5MDcyOTI3OTYuMTQ1MDUsInN1YiI6IjcyMzU5MTU3Iiwic2NvcGVzIjpbInVzZXIucmVhZCIsInVzZXIud3JpdGUiLCJ0YXNrLnJlYWQiLCJ0YXNrLndyaXRlIiwid2ViaG9vay5yZWFkIiwid2ViaG9vay53cml0ZSIsInByZXNldC5yZWFkIiwicHJlc2V0LndyaXRlIl19.Pd2a-uu3GtejiaUh9UwIXQFrLUPhtY9OoIpklfbMxH_LF-HnSSej6DNrv9aqbnt6i2EODxWF5cBM_9PcH8DgtGE1E6O2AJU_UEK9j5g2DJ8cnYxSQOIgPDYgrTt18OoF-9-KX3qh6lF8BAhMgLzXYgNJL5nxWosBm79w1QpPHnPyQBJIw53QbcKr7KeE-GP-KY189L4tnoE5GUrOM59oNmh8wucC2JoVcewGQcI68tkL_nm6ahWL2wt4fifzKrK6JUceb9ysuvG6qPT3JA5-nZpqAw8j_nS5PCogTOLkra0GsCH6_ErsurRJknbiEWpOjIrwZz9k0HGsq8ZJP07_FpOsvHVIo7wjkR4fMxJJo3v_Q-QhY3QwAVHoOb_WjY5b2VI6GQi2XkGzF9tsnFoiInVxOq_cMLyp4IZyEpoHBRhwyP1KOXInSddSVaBH4jrZc-t2ogv09LVdIpRg-CIzL8bsI5Rxq5UeWEwIQIRDWPkVtX7AKP1skoboHLn9D9DNJdI_VgU8_xs20XFcmSzzuZRUz7ZmD-AUbJ8cGq7yRWjLwytD6LiybjkU92fiyeM9DS38jOG3AlayEWPf6rhF49grphjSt6QWhvZq8ny-srT-AFEw6WjO06iczODNyZ9wsYME1KyUqXrq7qESCLnaRftSvQU-83mJvYjOJq5G78E'
         }
       })
       
-      const statusData = await statusResponse.json()
-      jobStatus = statusData.data.status
-      attempts++
-      
-      // Se il job fallisce
-      if (jobStatus === 'error') {
-        return new Response(
-          JSON.stringify({ error: 'Errore durante la conversione del file' }),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json()
+        jobStatus = statusData.data.status
+        console.log(`Job ${jobData.data.id} status: ${jobStatus} (attempt ${attempts + 1})`)
       }
+      
+      attempts++
+    }
+
+    // Se il job fallisce
+    if (jobStatus === 'error') {
+      return new Response(
+        JSON.stringify({ error: 'Errore durante la conversione del file. Verifica che il formato sia supportato.' }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
     }
 
     if (jobStatus !== 'finished') {
@@ -149,15 +163,37 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Ottieni URL di download
-    const exportTask = jobData.data.tasks.find((task: any) => task.name === 'export-file')
+    // Ottieni i task completati
+    const finalJobResponse = await fetch(`https://api.cloudconvert.com/v2/jobs/${jobData.data.id}`, {
+      headers: {
+        'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiNjVhNGM2YWE5YmIwYjEyM2I0N2NlMGE2NGVmZjM3Mjk5NmVhODE0NWE3NmMzNGM4YmNmY2U1YzhlMjE2ZDg0MDM5YmExZDkxYTI3YjY5MDkiLCJpYXQiOjE3NTE2MTkxOTYuMTQ4NzYyLCJuYmYiOjE3NTE2MTkxOTYuMTQ4NzYzLCJleHAiOjQ5MDcyOTI3OTYuMTQ1MDUsInN1YiI6IjcyMzU5MTU3Iiwic2NvcGVzIjpbInVzZXIucmVhZCIsInVzZXIud3JpdGUiLCJ0YXNrLnJlYWQiLCJ0YXNrLndyaXRlIiwid2ViaG9vay5yZWFkIiwid2ViaG9vay53cml0ZSIsInByZXNldC5yZWFkIiwicHJlc2V0LndyaXRlIl19.Pd2a-uu3GtejiaUh9UwIXQFrLUPhtY9OoIpklfbMxH_LF-HnSSej6DNrv9aqbnt6i2EODxWF5cBM_9PcH8DgtGE1E6O2AJU_UEK9j5g2DJ8cnYxSQOIgPDYgrTt18OoF-9-KX3qh6lF8BAhMgLzXYgNJL5nxWosBm79w1QpPHnPyQBJIw53QbcKr7KeE-GP-KY189L4tnoE5GUrOM59oNmh8wucC2JoVcewGQcI68tkL_nm6ahWL2wt4fifzKrK6JUceb9ysuvG6qPT3JA5-nZpqAw8j_nS5PCogTOLkra0GsCH6_ErsurRJknbiEWpOjIrwZz9k0HGsq8ZJP07_FpOsvHVIo7wjkR4fMxJJo3v_Q-QhY3QwAVHoOb_WjY5b2VI6GQi2XkGzF9tsnFoiInVxOq_cMLyp4IZyEpoHBRhwyP1KOXInSddSVaBH4jrZc-t2ogv09LVdIpRg-CIzL8bsI5Rxq5UeWEwIQIRDWPkVtX7AKP1skoboHLn9D9DNJdI_VgU8_xs20XFcmSzzuZRUz7ZmD-AUbJ8cGq7yRWjLwytD6LiybjkU92fiyeM9DS38jOG3AlayEWPf6rhF49grphjSt6QWhvZq8ny-srT-AFEw6WjO06iczODNyZ9wsYME1KyUqXrq7qESCLnaRftSvQU-83mJvYjOJq5G78E'
+      }
+    })
+
+    const finalJobData = await finalJobResponse.json()
+    
+    // Trova il task di export
+    const exportTask = finalJobData.data.tasks.find((task: any) => task.name === 'export-file')
+    
+    if (!exportTask || !exportTask.result || !exportTask.result.files || exportTask.result.files.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'Errore nel recupero del file convertito' }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
     const downloadUrl = exportTask.result.files[0].url
+    const originalName = fileName.split('.')[0]
+    const newFileName = `${originalName}.${targetFormat}`
 
     return new Response(
       JSON.stringify({
         success: true,
         downloadUrl: downloadUrl,
-        filename: `${fileName.split('.')[0]}.${targetFormat}`
+        filename: newFileName
       }),
       { 
         status: 200, 
@@ -168,7 +204,7 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Conversion error:', error)
     return new Response(
-      JSON.stringify({ error: 'Errore interno del server' }),
+      JSON.stringify({ error: `Errore interno del server: ${error.message}` }),
       { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
