@@ -101,8 +101,10 @@ export const translateDocument = async (
           console.error('Failed to parse error body:', parseError);
           // Keep the user-friendly default message if parsing fails
         }
-      } else if (error.message && !error.message.includes('non-2xx status code')) {
-        // Use the error message if it's not the technical "non-2xx status code" message
+      }
+      
+      // If we still have the generic fallback message, use the error.message as fallback
+      if (specificError === 'Si è verificato un errore durante la traduzione del documento. Riprova più tardi.' && error.message) {
         specificError = error.message;
       }
       
