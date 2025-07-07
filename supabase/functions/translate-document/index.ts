@@ -33,45 +33,34 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Estrai testo dal file con gestione migliorata
+    // Estrai testo dal file con gestione corretta
     let textToTranslate = ''
     
     try {
       console.log('Attempting to decode file content...')
       
-      // Gestione migliorata della decodifica
+      // Gestione corretta della decodifica base64
+      let base64Content = fileContent
+      
+      // Rimuovi il prefisso data: se presente
       if (fileContent.startsWith('data:')) {
-        // Rimuovi il prefisso data: se presente
-        const base64Content = fileContent.split(',')[1]
-        textToTranslate = new TextDecoder('utf-8').decode(
-          Uint8Array.from(atob(base64Content), c => c.charCodeAt(0))
-        )
-      } else {
-        // Prova a decodificare direttamente come base64
-        try {
-          const decodedBytes = Uint8Array.from(atob(fileContent), c => c.charCodeAt(0))
-          textToTranslate = new TextDecoder('utf-8').decode(decodedBytes)
-        } catch (base64Error) {
-          console.log('Not base64, trying as plain text')
-          textToTranslate = fileContent
-        }
+        base64Content = fileContent.split(',')[1]
       }
+      
+      // Decodifica base64 direttamente come stringa
+      textToTranslate = atob(base64Content)
       
       console.log('File decoded successfully, length:', textToTranslate.length)
       console.log('First 100 chars:', textToTranslate.substring(0, 100))
       
     } catch (decodeError) {
       console.error('Decode error:', decodeError)
-      return new Response(
-        JSON.stringify({ error: 'Impossibile decodificare il file. Assicurati che sia un file di testo valido (.txt).' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+      // Fallback: usa il contenuto come testo plain
+      textToTranslate = fileContent
+      console.log('Using content as plain text')
     }
 
-    // Verifica che il testo non sia vuoto e sia leggibile
+    // Verifica che il testo non sia vuoto
     if (!textToTranslate || textToTranslate.trim().length === 0) {
       console.error('Empty text after decoding')
       return new Response(
@@ -83,12 +72,12 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Verifica che il contenuto sia testo e non binario
-    const isBinary = /[\x00-\x08\x0E-\x1F\x7F-\xFF]/.test(textToTranslate.substring(0, 200))
-    if (isBinary) {
-      console.error('Content appears to be binary')
+    // Verifica che il contenuto sia testo leggibile (controllo più permissivo)
+    const hasReadableText = /[a-zA-Z\u00C0-\u017F\u0400-\u04FF\s]/.test(textToTranslate.substring(0, 200))
+    if (!hasReadableText) {
+      console.error('Content does not appear to be readable text')
       return new Response(
-        JSON.stringify({ error: 'Il file contiene dati binari. Usa solo file di testo (.txt) per la traduzione.' }),
+        JSON.stringify({ error: 'Il file non contiene testo leggibile. Usa file di testo (.txt) per la traduzione.' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -96,28 +85,32 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Pulisci il testo da caratteri di controllo
+    // Pulisci il testo mantenendo caratteri leggibili
     textToTranslate = textToTranslate
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Rimuovi caratteri di controllo
-      .replace(/\r\n/g, '\n') // Normalizza line endings
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '') // Rimuovi solo caratteri di controllo problematici
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
       .trim()
 
     console.log('Cleaned text length:', textToTranslate.length)
 
-    // Limita la lunghezza del testo per evitare errori URI Too Long (ridotto da 4000 a 1000 caratteri)
-    if (textToTranslate.length > 1000) {
-      textToTranslate = textToTranslate.substring(0, 1000) + '...'
-      console.log('Text truncated to 1000 characters')
+    // Limita la lunghezza del testo per evitare errori URI Too Long
+    if (textToTranslate.length > 800) {
+      textToTranslate = textToTranslate.substring(0, 800) + '...'
+      console.log('Text truncated to 800 characters')
     }
 
     console.log('Attempting translation with MyMemory API...')
 
+    // Usa italiano come lingua sorgente di default invece di "auto"
+    const sourceLang = 'it'
+    
     // Codifica il testo per URL
     const encodedText = encodeURIComponent(textToTranslate)
     
-    // Usa MyMemory API (gratuita)
+    // Usa MyMemory API con lingua sorgente specifica
     const translationResponse = await fetch(
-      `https://api.mymemory.translated.net/get?q=${encodedText}&langpair=auto|${targetLanguage}&de=translator@example.com`,
+      `https://api.mymemory.translated.net/get?q=${encodedText}&langpair=${sourceLang}|${targetLanguage}&de=translator@example.com`,
       {
         method: 'GET',
         headers: {
@@ -145,8 +138,22 @@ Deno.serve(async (req) => {
     }
 
     const translationData = await translationResponse.json()
-    console.log('Translation response:', translationData)
+    console.log('Translation response status:', translationData.responseStatus)
     
+    if (translationData.responseStatus !== 200) {
+      console.error('Translation service error:', translationData)
+      
+      return new Response(
+        JSON.stringify({ 
+          error: `Errore traduzione: ${translationData.responseDetails || 'Servizio non disponibile'}`
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
     if (!translationData.responseData || !translationData.responseData.translatedText) {
       console.error('No translation received:', translationData)
       
@@ -163,7 +170,7 @@ Deno.serve(async (req) => {
 
     const translatedText = translationData.responseData.translatedText
 
-    console.log('Translation successful')
+    console.log('Translation successful:', translatedText.substring(0, 100))
     return new Response(
       JSON.stringify({
         success: true,

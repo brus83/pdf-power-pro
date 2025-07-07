@@ -32,45 +32,34 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Estrai testo dal file con gestione migliorata
+    // Estrai testo dal file con gestione corretta
     let textToSummarize = ''
     
     try {
       console.log('Attempting to decode file content...')
       
-      // Gestione migliorata della decodifica
+      // Gestione corretta della decodifica base64
+      let base64Content = fileContent
+      
+      // Rimuovi il prefisso data: se presente
       if (fileContent.startsWith('data:')) {
-        // Rimuovi il prefisso data: se presente
-        const base64Content = fileContent.split(',')[1]
-        textToSummarize = new TextDecoder('utf-8').decode(
-          Uint8Array.from(atob(base64Content), c => c.charCodeAt(0))
-        )
-      } else {
-        // Prova a decodificare direttamente come base64
-        try {
-          const decodedBytes = Uint8Array.from(atob(fileContent), c => c.charCodeAt(0))
-          textToSummarize = new TextDecoder('utf-8').decode(decodedBytes)
-        } catch (base64Error) {
-          console.log('Not base64, trying as plain text')
-          textToSummarize = fileContent
-        }
+        base64Content = fileContent.split(',')[1]
       }
+      
+      // Decodifica base64 direttamente come stringa
+      textToSummarize = atob(base64Content)
       
       console.log('File decoded successfully, length:', textToSummarize.length)
       console.log('First 100 chars:', textToSummarize.substring(0, 100))
       
     } catch (decodeError) {
       console.error('Decode error:', decodeError)
-      return new Response(
-        JSON.stringify({ error: 'Impossibile decodificare il file. Assicurati che sia un file di testo valido (.txt).' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
+      // Fallback: usa il contenuto come testo plain
+      textToSummarize = fileContent
+      console.log('Using content as plain text')
     }
 
-    // Verifica che il testo non sia vuoto e sia leggibile
+    // Verifica che il testo non sia vuoto
     if (!textToSummarize || textToSummarize.trim().length === 0) {
       console.error('Empty text after decoding')
       return new Response(
@@ -82,12 +71,12 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Verifica che il contenuto sia testo e non binario
-    const isBinary = /[\x00-\x08\x0E-\x1F\x7F-\xFF]/.test(textToSummarize.substring(0, 200))
-    if (isBinary) {
-      console.error('Content appears to be binary')
+    // Verifica che il contenuto sia testo leggibile (controllo più permissivo)
+    const hasReadableText = /[a-zA-Z\u00C0-\u017F\u0400-\u04FF\s]/.test(textToSummarize.substring(0, 200))
+    if (!hasReadableText) {
+      console.error('Content does not appear to be readable text')
       return new Response(
-        JSON.stringify({ error: 'Il file contiene dati binari. Usa solo file di testo (.txt) per il riassunto.' }),
+        JSON.stringify({ error: 'Il file non contiene testo leggibile. Usa file di testo (.txt) per il riassunto.' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -95,10 +84,11 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Pulisci il testo da caratteri di controllo
+    // Pulisci il testo mantenendo caratteri leggibili
     textToSummarize = textToSummarize
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Rimuovi caratteri di controllo
-      .replace(/\r\n/g, '\n') // Normalizza line endings
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '') // Rimuovi solo caratteri di controllo problematici
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
       .trim()
 
     console.log('Cleaned text length:', textToSummarize.length)
@@ -109,10 +99,10 @@ Deno.serve(async (req) => {
       console.log('Text truncated to 5000 characters')
     }
 
-    // Usa un algoritmo di riassunto migliorato
-    const summary = generateAdvancedSummary(textToSummarize)
+    // Genera riassunto
+    const summary = generateSimpleSummary(textToSummarize)
 
-    console.log('Summary generated successfully')
+    console.log('Summary generated successfully:', summary.substring(0, 100))
     return new Response(
       JSON.stringify({
         success: true,
@@ -136,9 +126,9 @@ Deno.serve(async (req) => {
   }
 })
 
-function generateAdvancedSummary(text: string): string {
+function generateSimpleSummary(text: string): string {
   try {
-    console.log('Generating advanced summary for text of length:', text.length)
+    console.log('Generating summary for text of length:', text.length)
     
     // Se il testo è molto corto, restituiscilo così com'è
     if (text.length < 100) {
@@ -147,72 +137,44 @@ function generateAdvancedSummary(text: string): string {
     
     // Pulisci e normalizza il testo
     const cleanText = text
-      .replace(/\s+/g, ' ') // Normalizza spazi
-      .replace(/[^\w\s\p{L}.,!?;:()\-'"]/gu, ' ') // Mantieni solo caratteri leggibili
+      .replace(/\s+/g, ' ') // Normalizza spazi multipli
       .trim()
     
-    // Dividi in frasi usando delimitatori multipli
+    // Dividi in frasi
     const sentences = cleanText
       .split(/[.!?]+/)
       .map(s => s.trim())
-      .filter(s => s.length > 20 && s.length < 300) // Filtra frasi troppo corte o lunghe
-      .slice(0, 20) // Limita a 20 frasi max
+      .filter(s => s.length > 15 && s.length < 300)
+      .slice(0, 15) // Limita a 15 frasi max
     
     console.log('Found sentences:', sentences.length)
     
     if (sentences.length === 0) {
-      return 'Impossibile generare un riassunto: il testo non contiene frasi complete.'
+      return 'Il testo è troppo breve per generare un riassunto significativo.'
     }
     
     if (sentences.length <= 3) {
       return sentences.join('. ') + '.'
     }
 
-    // Algoritmo di scoring migliorato
-    const scoredSentences = sentences.map((sentence, index) => {
-      const words = sentence.toLowerCase().split(/\s+/)
-      const wordCount = words.length
-      
-      // Calcola score basato su vari fattori
-      let score = 0
-      
-      // Lunghezza ottimale (15-30 parole)
-      if (wordCount >= 15 && wordCount <= 30) score += 3
-      else if (wordCount >= 10 && wordCount <= 40) score += 1
-      
-      // Posizione nel testo (inizio e fine più importanti)
-      if (index < 3) score += 2 // Prime frasi
-      if (index >= sentences.length - 3) score += 1 // Ultime frasi
-      
-      // Parole chiave italiane comuni
-      const keyWords = ['importante', 'principale', 'fondamentale', 'essenziale', 'significativo', 'rilevante', 'cruciale']
-      const keyWordCount = words.filter(w => keyWords.includes(w)).length
-      score += keyWordCount * 2
-      
-      // Presenza di numeri o date (spesso importanti)
-      if (/\d/.test(sentence)) score += 1
-      
-      // Complessità sintattica (virgole, congiunzioni)
-      if (sentence.includes(',')) score += 1
-      if (/\b(che|quando|dove|come|perché|quindi|inoltre|tuttavia|infatti)\b/.test(sentence.toLowerCase())) score += 1
-      
-      return { sentence, score, index }
-    })
+    // Seleziona le prime 3 frasi più significative
+    const selectedSentences = sentences
+      .slice(0, Math.min(10, sentences.length)) // Prendi le prime 10 frasi
+      .filter((sentence, index) => {
+        // Prendi la prima, una nel mezzo e una verso la fine
+        return index === 0 || 
+               index === Math.floor(sentences.length / 2) || 
+               index === sentences.length - 1
+      })
+      .slice(0, 3) // Massimo 3 frasi
 
-    // Seleziona le migliori 3-4 frasi
-    const topSentences = scoredSentences
-      .sort((a, b) => b.score - a.score)
-      .slice(0, Math.min(4, Math.ceil(sentences.length / 3)))
-      .sort((a, b) => a.index - b.index) // Riordina per posizione originale
-      .map(item => item.sentence)
-
-    const summary = topSentences.join('. ')
-    console.log('Advanced summary created successfully, length:', summary.length)
+    const summary = selectedSentences.join('. ')
+    console.log('Summary created successfully')
     
     return summary + (summary.endsWith('.') ? '' : '.')
     
   } catch (error) {
-    console.error('Error in generateAdvancedSummary:', error)
-    return 'Errore nella generazione del riassunto. Verifica che il file contenga testo leggibile.'
+    console.error('Error in generateSimpleSummary:', error)
+    return 'Errore nella generazione del riassunto. Il testo potrebbe contenere caratteri non supportati.'
   }
 }
