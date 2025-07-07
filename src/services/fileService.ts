@@ -79,9 +79,19 @@ export const translateDocument = async (
       let specificError = error.message;
       if (error.context?.body) {
         try {
-          const errorBody = typeof error.context.body === 'string' 
-            ? JSON.parse(error.context.body) 
-            : error.context.body;
+          let bodyContent = error.context.body;
+          
+          // Check if body is a Uint8Array and decode it to string
+          if (bodyContent instanceof Uint8Array) {
+            const decoder = new TextDecoder();
+            bodyContent = decoder.decode(bodyContent);
+          }
+          
+          // Parse the body content as JSON if it's a string
+          const errorBody = typeof bodyContent === 'string' 
+            ? JSON.parse(bodyContent) 
+            : bodyContent;
+            
           if (errorBody.error) {
             specificError = errorBody.error;
           }
