@@ -104,10 +104,10 @@ Deno.serve(async (req) => {
 
     console.log('Cleaned text length:', textToTranslate.length)
 
-    // Limita la lunghezza del testo per l'API gratuita (MyMemory ha limite di 5000 caratteri)
-    if (textToTranslate.length > 4000) {
-      textToTranslate = textToTranslate.substring(0, 4000) + '...'
-      console.log('Text truncated to 4000 characters')
+    // Limita la lunghezza del testo per evitare errori URI Too Long (ridotto da 4000 a 1000 caratteri)
+    if (textToTranslate.length > 1000) {
+      textToTranslate = textToTranslate.substring(0, 1000) + '...'
+      console.log('Text truncated to 1000 characters')
     }
 
     console.log('Attempting translation with MyMemory API...')
