@@ -1,4 +1,3 @@
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -35,10 +34,10 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Limite dimensione file (10MB per test)
-    if (fileSize > 10 * 1024 * 1024) {
+    // Limite dimensione file aumentato a 30MB
+    if (fileSize > 30 * 1024 * 1024) {
       return new Response(
-        JSON.stringify({ error: 'File troppo grande. Limite: 10MB' }),
+        JSON.stringify({ error: 'File troppo grande. Limite: 30MB' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
