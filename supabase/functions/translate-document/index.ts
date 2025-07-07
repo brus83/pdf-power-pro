@@ -108,9 +108,9 @@ Deno.serve(async (req) => {
     // Codifica il testo per URL
     const encodedText = encodeURIComponent(textToTranslate)
     
-    // Usa MyMemory API con lingua sorgente specifica
+    // Usa MyMemory API con lingua sorgente specifica e email valida
     const translationResponse = await fetch(
-      `https://api.mymemory.translated.net/get?q=${encodedText}&langpair=${sourceLang}|${targetLanguage}&de=translator@example.com`,
+      `https://api.mymemory.translated.net/get?q=${encodedText}&langpair=${sourceLang}|${targetLanguage}&de=app.translator@gmail.com`,
       {
         method: 'GET',
         headers: {
