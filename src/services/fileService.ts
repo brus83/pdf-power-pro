@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { convertFileToBase64 } from '@/lib/fileUtils';
 
@@ -75,7 +74,23 @@ export const translateDocument = async (
 
     if (error) {
       console.error('Translation error:', error);
-      return { success: false, error: error.message };
+      
+      // Try to extract more specific error message from the edge function response
+      let specificError = error.message;
+      if (error.context?.body) {
+        try {
+          const errorBody = typeof error.context.body === 'string' 
+            ? JSON.parse(error.context.body) 
+            : error.context.body;
+          if (errorBody.error) {
+            specificError = errorBody.error;
+          }
+        } catch (parseError) {
+          console.error('Failed to parse error body:', parseError);
+        }
+      }
+      
+      return { success: false, error: specificError };
     }
 
     return {
