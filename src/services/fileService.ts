@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { convertFileToBase64 } from '@/lib/fileUtils';
+import { convertFileToBase64, convertFileToText } from '@/lib/fileUtils';
 
 export interface ConversionResult {
   success: boolean;
@@ -61,14 +61,23 @@ export const translateDocument = async (
   targetLanguage: string
 ): Promise<TranslationResult> => {
   try {
-    const base64Content = await convertFileToBase64(file);
+    // Per file di testo, usa readAsText invece di base64
+    let fileContent = '';
+    
+    if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+      fileContent = await convertFileToText(file);
+    } else {
+      // Per altri tipi di file, usa base64
+      fileContent = await convertFileToBase64(file);
+    }
     
     const { data, error } = await supabase.functions.invoke('translate-document', {
       body: {
-        fileContent: base64Content,
+        fileContent: fileContent,
         fileName: file.name,
         fileType: file.type,
-        targetLanguage: targetLanguage
+        targetLanguage: targetLanguage,
+        isPlainText: file.type === 'text/plain' || file.name.endsWith('.txt')
       }
     });
 
@@ -126,13 +135,22 @@ export const translateDocument = async (
 
 export const summarizeDocument = async (file: File): Promise<SummaryResult> => {
   try {
-    const base64Content = await convertFileToBase64(file);
+    // Per file di testo, usa readAsText invece di base64
+    let fileContent = '';
+    
+    if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+      fileContent = await convertFileToText(file);
+    } else {
+      // Per altri tipi di file, usa base64
+      fileContent = await convertFileToBase64(file);
+    }
     
     const { data, error } = await supabase.functions.invoke('summarize-document', {
       body: {
-        fileContent: base64Content,
+        fileContent: fileContent,
         fileName: file.name,
-        fileType: file.type
+        fileType: file.type,
+        isPlainText: file.type === 'text/plain' || file.name.endsWith('.txt')
       }
     });
 

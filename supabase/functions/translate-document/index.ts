@@ -9,6 +9,7 @@ interface TranslationRequest {
   fileName: string;
   fileType: string;
   targetLanguage: string;
+  isPlainText?: boolean;
 }
 
 Deno.serve(async (req) => {
@@ -17,9 +18,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { fileContent, fileName, fileType, targetLanguage }: TranslationRequest = await req.json()
+    const { fileContent, fileName, fileType, targetLanguage, isPlainText }: TranslationRequest = await req.json()
 
-    console.log('Translation request received:', { fileName, fileType, targetLanguage })
+    console.log('Translation request received:', { fileName, fileType, targetLanguage, isPlainText })
 
     // Validazione input
     if (!fileContent || !fileName || !targetLanguage) {
@@ -33,36 +34,45 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Estrai testo dal file con gestione corretta
+    // Estrai testo dal file
     let textToTranslate = ''
     
-    try {
-      console.log('Attempting to decode file content...')
-      
-      // Gestione corretta della decodifica base64
-      let base64Content = fileContent
-      
-      // Rimuovi il prefisso data: se presente
-      if (fileContent.startsWith('data:')) {
-        base64Content = fileContent.split(',')[1]
-      }
-      
-      // Decodifica base64 direttamente come stringa
-      textToTranslate = atob(base64Content)
-      
-      console.log('File decoded successfully, length:', textToTranslate.length)
-      console.log('First 100 chars:', textToTranslate.substring(0, 100))
-      
-    } catch (decodeError) {
-      console.error('Decode error:', decodeError)
-      // Fallback: usa il contenuto come testo plain
+    if (isPlainText) {
+      // Il contenuto è già testo plain
       textToTranslate = fileContent
-      console.log('Using content as plain text')
+      console.log('Using plain text content, length:', textToTranslate.length)
+    } else {
+      // Decodifica base64
+      try {
+        console.log('Attempting to decode base64 content...')
+        
+        let base64Content = fileContent
+        
+        // Rimuovi il prefisso data: se presente
+        if (fileContent.startsWith('data:')) {
+          base64Content = fileContent.split(',')[1]
+        }
+        
+        // Decodifica base64
+        textToTranslate = atob(base64Content)
+        
+        console.log('File decoded successfully, length:', textToTranslate.length)
+        
+      } catch (decodeError) {
+        console.error('Decode error:', decodeError)
+        return new Response(
+          JSON.stringify({ error: 'Impossibile decodificare il contenuto del file' }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
     }
 
     // Verifica che il testo non sia vuoto
     if (!textToTranslate || textToTranslate.trim().length === 0) {
-      console.error('Empty text after decoding')
+      console.error('Empty text after processing')
       return new Response(
         JSON.stringify({ error: 'Il file sembra essere vuoto o non contiene testo leggibile' }),
         { 
@@ -72,10 +82,11 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Verifica che il contenuto sia testo leggibile (controllo più permissivo)
+    // Verifica che il contenuto sia testo leggibile
     const hasReadableText = /[a-zA-Z\u00C0-\u017F\u0400-\u04FF\s]/.test(textToTranslate.substring(0, 200))
     if (!hasReadableText) {
       console.error('Content does not appear to be readable text')
+      console.log('First 200 chars:', textToTranslate.substring(0, 200))
       return new Response(
         JSON.stringify({ error: 'Il file non contiene testo leggibile. Usa file di testo (.txt) per la traduzione.' }),
         { 
@@ -85,16 +96,17 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Pulisci il testo mantenendo caratteri leggibili
+    // Pulisci il testo
     textToTranslate = textToTranslate
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '') // Rimuovi solo caratteri di controllo problematici
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '') // Rimuovi caratteri di controllo
       .replace(/\r\n/g, '\n')
       .replace(/\r/g, '\n')
       .trim()
 
     console.log('Cleaned text length:', textToTranslate.length)
+    console.log('Text preview:', textToTranslate.substring(0, 100))
 
-    // Limita la lunghezza del testo per evitare errori URI Too Long
+    // Limita la lunghezza del testo
     if (textToTranslate.length > 800) {
       textToTranslate = textToTranslate.substring(0, 800) + '...'
       console.log('Text truncated to 800 characters')
@@ -102,13 +114,12 @@ Deno.serve(async (req) => {
 
     console.log('Attempting translation with MyMemory API...')
 
-    // Usa italiano come lingua sorgente di default invece di "auto"
+    // Usa italiano come lingua sorgente
     const sourceLang = 'it'
     
     // Codifica il testo per URL
     const encodedText = encodeURIComponent(textToTranslate)
     
-    // Usa MyMemory API con email valida generica
     const translationResponse = await fetch(
       `https://api.mymemory.translated.net/get?q=${encodedText}&langpair=${sourceLang}|${targetLanguage}&de=translator@example.com`,
       {
@@ -126,7 +137,6 @@ Deno.serve(async (req) => {
     if (!translationResponse.ok) {
       console.error('Translation API error:', translationResponse.status, translationResponse.statusText)
       
-      // Leggi il corpo della risposta per maggiori dettagli sull'errore
       let errorDetails = ''
       try {
         const errorBody = await translationResponse.text()
@@ -149,7 +159,6 @@ Deno.serve(async (req) => {
 
     const translationData = await translationResponse.json()
     console.log('Translation response status:', translationData.responseStatus)
-    console.log('Translation response data:', translationData)
     
     if (translationData.responseStatus !== 200) {
       console.error('Translation service error:', translationData)
@@ -181,7 +190,7 @@ Deno.serve(async (req) => {
 
     const translatedText = translationData.responseData.translatedText
 
-    console.log('Translation successful:', translatedText.substring(0, 100))
+    console.log('Translation successful')
     return new Response(
       JSON.stringify({
         success: true,

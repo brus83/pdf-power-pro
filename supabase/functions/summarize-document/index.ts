@@ -8,6 +8,7 @@ interface SummaryRequest {
   fileContent: string;
   fileName: string;
   fileType: string;
+  isPlainText?: boolean;
 }
 
 Deno.serve(async (req) => {
@@ -16,9 +17,9 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { fileContent, fileName, fileType }: SummaryRequest = await req.json()
+    const { fileContent, fileName, fileType, isPlainText }: SummaryRequest = await req.json()
 
-    console.log('Summary request received:', { fileName, fileType })
+    console.log('Summary request received:', { fileName, fileType, isPlainText })
 
     // Validazione input
     if (!fileContent || !fileName) {
@@ -32,36 +33,45 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Estrai testo dal file con gestione corretta
+    // Estrai testo dal file
     let textToSummarize = ''
     
-    try {
-      console.log('Attempting to decode file content...')
-      
-      // Gestione corretta della decodifica base64
-      let base64Content = fileContent
-      
-      // Rimuovi il prefisso data: se presente
-      if (fileContent.startsWith('data:')) {
-        base64Content = fileContent.split(',')[1]
-      }
-      
-      // Decodifica base64 direttamente come stringa
-      textToSummarize = atob(base64Content)
-      
-      console.log('File decoded successfully, length:', textToSummarize.length)
-      console.log('First 100 chars:', textToSummarize.substring(0, 100))
-      
-    } catch (decodeError) {
-      console.error('Decode error:', decodeError)
-      // Fallback: usa il contenuto come testo plain
+    if (isPlainText) {
+      // Il contenuto è già testo plain
       textToSummarize = fileContent
-      console.log('Using content as plain text')
+      console.log('Using plain text content, length:', textToSummarize.length)
+    } else {
+      // Decodifica base64
+      try {
+        console.log('Attempting to decode base64 content...')
+        
+        let base64Content = fileContent
+        
+        // Rimuovi il prefisso data: se presente
+        if (fileContent.startsWith('data:')) {
+          base64Content = fileContent.split(',')[1]
+        }
+        
+        // Decodifica base64
+        textToSummarize = atob(base64Content)
+        
+        console.log('File decoded successfully, length:', textToSummarize.length)
+        
+      } catch (decodeError) {
+        console.error('Decode error:', decodeError)
+        return new Response(
+          JSON.stringify({ error: 'Impossibile decodificare il contenuto del file' }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
     }
 
     // Verifica che il testo non sia vuoto
     if (!textToSummarize || textToSummarize.trim().length === 0) {
-      console.error('Empty text after decoding')
+      console.error('Empty text after processing')
       return new Response(
         JSON.stringify({ error: 'Il file sembra essere vuoto o non contiene testo leggibile' }),
         { 
@@ -71,10 +81,11 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Verifica che il contenuto sia testo leggibile (controllo più permissivo)
+    // Verifica che il contenuto sia testo leggibile
     const hasReadableText = /[a-zA-Z\u00C0-\u017F\u0400-\u04FF\s]/.test(textToSummarize.substring(0, 200))
     if (!hasReadableText) {
       console.error('Content does not appear to be readable text')
+      console.log('First 200 chars:', textToSummarize.substring(0, 200))
       return new Response(
         JSON.stringify({ error: 'Il file non contiene testo leggibile. Usa file di testo (.txt) per il riassunto.' }),
         { 
@@ -84,14 +95,15 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Pulisci il testo mantenendo caratteri leggibili
+    // Pulisci il testo
     textToSummarize = textToSummarize
-      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '') // Rimuovi solo caratteri di controllo problematici
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '') // Rimuovi caratteri di controllo
       .replace(/\r\n/g, '\n')
       .replace(/\r/g, '\n')
       .trim()
 
     console.log('Cleaned text length:', textToSummarize.length)
+    console.log('Text preview:', textToSummarize.substring(0, 100))
 
     // Limita la lunghezza del testo
     if (textToSummarize.length > 5000) {
@@ -102,7 +114,7 @@ Deno.serve(async (req) => {
     // Genera riassunto
     const summary = generateSimpleSummary(textToSummarize)
 
-    console.log('Summary generated successfully:', summary.substring(0, 100))
+    console.log('Summary generated successfully')
     return new Response(
       JSON.stringify({
         success: true,

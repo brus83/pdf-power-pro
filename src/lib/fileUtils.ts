@@ -12,6 +12,18 @@ export const convertFileToBase64 = (file: File): Promise<string> => {
   });
 };
 
+export const convertFileToText = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsText(file, 'UTF-8');
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result);
+    };
+    reader.onerror = error => reject(error);
+  });
+};
+
 export const extractTextFromFile = async (file: File): Promise<string> => {
   const fileType = file.type;
   
