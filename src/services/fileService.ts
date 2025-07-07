@@ -1,4 +1,5 @@
-import { supabase } from '@/lib/supabase';
+
+import { supabase } from '@/integrations/supabase/client';
 import { convertFileToBase64 } from '@/lib/fileUtils';
 
 export interface ConversionResult {
