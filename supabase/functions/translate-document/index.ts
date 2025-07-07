@@ -108,9 +108,9 @@ Deno.serve(async (req) => {
     // Codifica il testo per URL
     const encodedText = encodeURIComponent(textToTranslate)
     
-    // Usa MyMemory API con lingua sorgente specifica e email valida
+    // Usa MyMemory API con email valida generica
     const translationResponse = await fetch(
-      `https://api.mymemory.translated.net/get?q=${encodedText}&langpair=${sourceLang}|${targetLanguage}&de=app.translator@gmail.com`,
+      `https://api.mymemory.translated.net/get?q=${encodedText}&langpair=${sourceLang}|${targetLanguage}&de=translator@example.com`,
       {
         method: 'GET',
         headers: {
@@ -126,9 +126,19 @@ Deno.serve(async (req) => {
     if (!translationResponse.ok) {
       console.error('Translation API error:', translationResponse.status, translationResponse.statusText)
       
+      // Leggi il corpo della risposta per maggiori dettagli sull'errore
+      let errorDetails = ''
+      try {
+        const errorBody = await translationResponse.text()
+        console.error('API error body:', errorBody)
+        errorDetails = errorBody
+      } catch (e) {
+        console.error('Could not read error body:', e)
+      }
+      
       return new Response(
         JSON.stringify({ 
-          error: `Errore servizio traduzione: ${translationResponse.status} - ${translationResponse.statusText}`
+          error: `Errore servizio traduzione: ${translationResponse.status} - ${translationResponse.statusText}. ${errorDetails ? 'Dettagli: ' + errorDetails : ''}`
         }),
         { 
           status: 503, 
@@ -139,6 +149,7 @@ Deno.serve(async (req) => {
 
     const translationData = await translationResponse.json()
     console.log('Translation response status:', translationData.responseStatus)
+    console.log('Translation response data:', translationData)
     
     if (translationData.responseStatus !== 200) {
       console.error('Translation service error:', translationData)

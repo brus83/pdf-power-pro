@@ -52,6 +52,7 @@ supabase functions deploy summarize-document
 #### MyMemory (Traduzione)
 - MyMemory offre traduzione gratuita senza API key
 - Limite: 5000 caratteri per richiesta
+- **Importante**: Per un uso ottimale, sostituisci `translator@example.com` nell'edge function `translate-document` con il tuo indirizzo email valido nel parametro `de` della richiesta API
 
 ### 4. Formati Supportati
 
