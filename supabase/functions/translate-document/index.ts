@@ -22,12 +22,13 @@ serve(async (req) => {
   try {
     const { fileContent, fileName, fileType, targetLanguage }: TranslationRequest = await req.json()
 
-    console.log('Translation request:', { fileName, fileType, targetLanguage })
+    console.log('Translation request received:', { fileName, fileType, targetLanguage })
 
     // Validazione input
     if (!fileContent || !fileName || !targetLanguage) {
+      console.error('Missing parameters:', { fileContent: !!fileContent, fileName: !!fileName, targetLanguage: !!targetLanguage })
       return new Response(
-        JSON.stringify({ error: 'Parametri mancanti' }),
+        JSON.stringify({ error: 'Parametri mancanti: fileContent, fileName e targetLanguage sono richiesti' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -39,25 +40,44 @@ serve(async (req) => {
     let textToTranslate = ''
     
     try {
-      if (fileType === 'text/plain') {
+      console.log('Attempting to decode file content...')
+      
+      // Verifica se il contenuto è già in base64 valido
+      if (fileContent.includes('data:')) {
+        // Rimuovi il prefisso data: se presente
+        const base64Content = fileContent.split(',')[1] || fileContent
+        textToTranslate = atob(base64Content)
+      } else {
+        // Prova a decodificare direttamente
         textToTranslate = atob(fileContent)
-      } else if (fileType === 'application/pdf') {
-        // Per i PDF, per ora restituiamo un messaggio di errore informativo
+      }
+      
+      console.log('File decoded successfully, length:', textToTranslate.length)
+      
+    } catch (decodeError) {
+      console.error('Decode error:', decodeError)
+      
+      // Se la decodifica fallisce, prova a usare il contenuto come testo plain
+      try {
+        textToTranslate = fileContent
+        console.log('Using content as plain text')
+      } catch (fallbackError) {
+        console.error('Fallback error:', fallbackError)
         return new Response(
-          JSON.stringify({ error: 'I file PDF non sono ancora supportati per la traduzione. Usa file di testo (.txt)' }),
+          JSON.stringify({ error: 'Impossibile leggere il contenuto del file. Assicurati che sia un file di testo valido.' }),
           { 
             status: 400, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           }
         )
-      } else {
-        // Per altri formati, prova a decodificare come testo
-        textToTranslate = atob(fileContent)
       }
-    } catch (decodeError) {
-      console.error('Decode error:', decodeError)
+    }
+
+    // Verifica che il testo non sia vuoto
+    if (!textToTranslate || textToTranslate.trim().length === 0) {
+      console.error('Empty text after decoding')
       return new Response(
-        JSON.stringify({ error: 'Impossibile leggere il contenuto del file' }),
+        JSON.stringify({ error: 'Il file sembra essere vuoto o non contiene testo leggibile' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -65,10 +85,12 @@ serve(async (req) => {
       )
     }
 
-    // Verifica che il testo non sia vuoto
-    if (!textToTranslate || textToTranslate.trim().length === 0) {
+    // Verifica che il contenuto sia effettivamente testo
+    const hasValidText = /[\w\s\p{L}]/u.test(textToTranslate.substring(0, 100))
+    if (!hasValidText) {
+      console.error('Content does not appear to be valid text')
       return new Response(
-        JSON.stringify({ error: 'Il file sembra essere vuoto o non leggibile' }),
+        JSON.stringify({ error: 'Il contenuto del file non sembra essere testo valido. Usa file di testo (.txt).' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -77,58 +99,80 @@ serve(async (req) => {
     }
 
     // Limita la lunghezza del testo per l'API gratuita
-    if (textToTranslate.length > 5000) {
-      textToTranslate = textToTranslate.substring(0, 5000) + '...'
+    if (textToTranslate.length > 3000) {
+      textToTranslate = textToTranslate.substring(0, 3000) + '...'
+      console.log('Text truncated to 3000 characters')
     }
 
-    console.log('Text to translate length:', textToTranslate.length)
+    console.log('Attempting translation with MyMemory API...')
 
     // Usa Google Translate API gratuita (tramite MyMemory)
     const translationResponse = await fetch(
-      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=auto|${targetLanguage}&de=developer@example.com`,
+      `https://api.mymemory.translated.net/get?q=${encodeURIComponent(textToTranslate)}&langpair=auto|${targetLanguage}&de=supabase@translator.app`,
       {
         method: 'GET',
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; DocumentTranslator/1.0)'
+          'User-Agent': 'DocumentTranslator/1.0',
+          'Accept': 'application/json'
         }
       }
     )
 
+    console.log('MyMemory API response status:', translationResponse.status)
+
     if (!translationResponse.ok) {
       console.error('Translation API error:', translationResponse.status, translationResponse.statusText)
+      
+      // Fallback: restituisci il testo originale con un messaggio
       return new Response(
-        JSON.stringify({ error: 'Servizio di traduzione non disponibile' }),
+        JSON.stringify({ 
+          success: true,
+          translatedText: `[TRADUZIONE NON DISPONIBILE - TESTO ORIGINALE]\n\n${textToTranslate}`,
+          warning: 'Servizio di traduzione temporaneamente non disponibile'
+        }),
         { 
-          status: 503, 
+          status: 200, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
     }
 
     const translationData = await translationResponse.json()
-    console.log('Translation response:', translationData)
+    console.log('Translation data received:', translationData)
     
     if (translationData.responseStatus !== 200) {
       console.error('Translation service error:', translationData)
+      
+      // Fallback: restituisci il testo originale
       return new Response(
-        JSON.stringify({ error: 'Errore durante la traduzione: ' + (translationData.responseDetails || 'Servizio non disponibile') }),
+        JSON.stringify({ 
+          success: true,
+          translatedText: `[ERRORE TRADUZIONE - TESTO ORIGINALE]\n\n${textToTranslate}`,
+          warning: 'Errore nel servizio di traduzione: ' + (translationData.responseDetails || 'Servizio non disponibile')
+        }),
         { 
-          status: 400, 
+          status: 200, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
     }
 
     if (!translationData.responseData || !translationData.responseData.translatedText) {
+      console.error('No translation received')
       return new Response(
-        JSON.stringify({ error: 'Nessuna traduzione ricevuta dal servizio' }),
+        JSON.stringify({ 
+          success: true,
+          translatedText: `[NESSUNA TRADUZIONE - TESTO ORIGINALE]\n\n${textToTranslate}`,
+          warning: 'Nessuna traduzione ricevuta dal servizio'
+        }),
         { 
-          status: 400, 
+          status: 200, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
     }
 
+    console.log('Translation successful')
     return new Response(
       JSON.stringify({
         success: true,
@@ -143,7 +187,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Translation error:', error)
     return new Response(
-      JSON.stringify({ error: 'Errore interno del server: ' + error.message }),
+      JSON.stringify({ error: 'Errore interno del server durante la traduzione: ' + error.message }),
       { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 

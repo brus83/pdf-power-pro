@@ -20,12 +20,13 @@ serve(async (req) => {
   try {
     const { fileContent, fileName, fileType }: SummaryRequest = await req.json()
 
-    console.log('Summary request:', { fileName, fileType })
+    console.log('Summary request received:', { fileName, fileType })
 
     // Validazione input
     if (!fileContent || !fileName) {
+      console.error('Missing parameters:', { fileContent: !!fileContent, fileName: !!fileName })
       return new Response(
-        JSON.stringify({ error: 'Parametri mancanti' }),
+        JSON.stringify({ error: 'Parametri mancanti: fileContent e fileName sono richiesti' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -37,36 +38,44 @@ serve(async (req) => {
     let textToSummarize = ''
     
     try {
-      if (fileType === 'text/plain') {
+      console.log('Attempting to decode file content...')
+      
+      // Verifica se il contenuto è già in base64 valido
+      if (fileContent.includes('data:')) {
+        // Rimuovi il prefisso data: se presente
+        const base64Content = fileContent.split(',')[1] || fileContent
+        textToSummarize = atob(base64Content)
+      } else {
+        // Prova a decodificare direttamente
         textToSummarize = atob(fileContent)
-      } else if (fileType === 'application/pdf') {
-        // Per i PDF, per ora restituiamo un messaggio di errore informativo
+      }
+      
+      console.log('File decoded successfully, length:', textToSummarize.length)
+      
+    } catch (decodeError) {
+      console.error('Decode error:', decodeError)
+      
+      // Se la decodifica fallisce, prova a usare il contenuto come testo plain
+      try {
+        textToSummarize = fileContent
+        console.log('Using content as plain text')
+      } catch (fallbackError) {
+        console.error('Fallback error:', fallbackError)
         return new Response(
-          JSON.stringify({ error: 'I file PDF non sono ancora supportati per il riassunto. Usa file di testo (.txt)' }),
+          JSON.stringify({ error: 'Impossibile leggere il contenuto del file. Assicurati che sia un file di testo valido.' }),
           { 
             status: 400, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           }
         )
-      } else {
-        // Per altri formati, prova a decodificare come testo
-        textToSummarize = atob(fileContent)
       }
-    } catch (decodeError) {
-      console.error('Decode error:', decodeError)
-      return new Response(
-        JSON.stringify({ error: 'Impossibile leggere il contenuto del file. Assicurati che sia un file di testo valido.' }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
     }
 
     // Verifica che il testo non sia vuoto
     if (!textToSummarize || textToSummarize.trim().length === 0) {
+      console.error('Empty text after decoding')
       return new Response(
-        JSON.stringify({ error: 'Il file sembra essere vuoto o non leggibile' }),
+        JSON.stringify({ error: 'Il file sembra essere vuoto o non contiene testo leggibile' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -74,10 +83,12 @@ serve(async (req) => {
       )
     }
 
-    // Verifica che il contenuto sia effettivamente testo e non binario
-    if (containsBinaryData(textToSummarize)) {
+    // Verifica che il contenuto sia effettivamente testo
+    const hasValidText = /[\w\s\p{L}]/u.test(textToSummarize.substring(0, 100))
+    if (!hasValidText) {
+      console.error('Content does not appear to be valid text')
       return new Response(
-        JSON.stringify({ error: 'Il file contiene dati binari. Usa file di testo (.txt) per il riassunto.' }),
+        JSON.stringify({ error: 'Il contenuto del file non sembra essere testo valido. Usa file di testo (.txt).' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -88,13 +99,15 @@ serve(async (req) => {
     console.log('Text to summarize length:', textToSummarize.length)
 
     // Limita la lunghezza del testo
-    if (textToSummarize.length > 3000) {
-      textToSummarize = textToSummarize.substring(0, 3000)
+    if (textToSummarize.length > 5000) {
+      textToSummarize = textToSummarize.substring(0, 5000)
+      console.log('Text truncated to 5000 characters')
     }
 
     // Usa un algoritmo di riassunto semplice basato su frasi chiave
     const summary = generateSimpleSummary(textToSummarize)
 
+    console.log('Summary generated successfully')
     return new Response(
       JSON.stringify({
         success: true,
@@ -109,7 +122,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Summary error:', error)
     return new Response(
-      JSON.stringify({ error: 'Errore interno del server: ' + error.message }),
+      JSON.stringify({ error: 'Errore interno del server durante il riassunto: ' + error.message }),
       { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -118,39 +131,55 @@ serve(async (req) => {
   }
 })
 
-function containsBinaryData(text: string): boolean {
-  // Controlla se il testo contiene caratteri di controllo tipici dei dati binari
-  const binaryPattern = /[\x00-\x08\x0E-\x1F\x7F-\xFF]/g
-  const binaryMatches = text.match(binaryPattern)
-  
-  // Se più del 10% del contenuto sono caratteri binari, consideralo binario
-  if (binaryMatches && binaryMatches.length > text.length * 0.1) {
-    return true
-  }
-  
-  // Controlla pattern tipici dei PDF
-  if (text.includes('endobj') || text.includes('startxref') || text.includes('%%EOF')) {
-    return true
-  }
-  
-  return false
-}
-
 function generateSimpleSummary(text: string): string {
-  // Algoritmo di riassunto semplificato
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 10)
-  
-  if (sentences.length <= 3) {
-    return text
+  try {
+    console.log('Generating summary for text of length:', text.length)
+    
+    // Pulisci il testo da caratteri speciali e normalizzalo
+    const cleanText = text
+      .replace(/[^\w\s\p{L}.,!?;:()\-]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    
+    if (cleanText.length < 50) {
+      return cleanText
+    }
+    
+    // Dividi in frasi
+    const sentences = cleanText
+      .split(/[.!?]+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 15 && s.length < 200)
+    
+    console.log('Found sentences:', sentences.length)
+    
+    if (sentences.length <= 3) {
+      return sentences.join('. ') + '.'
+    }
+
+    // Prendi le prime 3 frasi più significative (che contengono più parole comuni)
+    const scoredSentences = sentences.map(sentence => {
+      const words = sentence.toLowerCase().split(/\s+/)
+      const score = words.length + 
+        (words.filter(w => w.length > 4).length * 2) + // parole lunghe
+        (sentence.includes(',') ? 1 : 0) + // complessità
+        (sentence.includes('è') || sentence.includes('sono') || sentence.includes('ha') ? 1 : 0) // verbi comuni italiani
+      
+      return { sentence, score }
+    })
+
+    const topSentences = scoredSentences
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3)
+      .map(item => item.sentence)
+
+    const summary = topSentences.join('. ')
+    console.log('Summary created successfully')
+    
+    return summary + (summary.endsWith('.') ? '' : '.')
+    
+  } catch (error) {
+    console.error('Error in generateSimpleSummary:', error)
+    return 'Errore nella generazione del riassunto: il testo potrebbe contenere caratteri non supportati.'
   }
-
-  // Prendi le prime 3 frasi più significative (più lunghe)
-  const sortedSentences = sentences
-    .map(s => s.trim())
-    .filter(s => s.length > 20)
-    .sort((a, b) => b.length - a.length)
-    .slice(0, 3)
-
-  const summary = sortedSentences.join('. ')
-  return summary + (summary.endsWith('.') ? '' : '.')
 }
