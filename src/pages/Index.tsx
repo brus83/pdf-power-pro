@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
-import { convertFile, translateDocument, summarizeDocument } from '@/services/fileService';
+import { convertFile, translateDocument, summarizeDocument, mergePdfs, splitPdf } from '@/services/fileService';
 import { downloadFile } from '@/lib/fileUtils';
 
 const Index = () => {
@@ -22,6 +22,9 @@ const Index = () => {
   const [convertedFileName, setConvertedFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [conversionProgress, setConversionProgress] = useState(0);
+  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
+  const [splitPages, setSplitPages] = useState('');
+  const [splitType, setSplitType] = useState<'pages' | 'range'>('pages');
 
   const supportedFormats = [
     { value: 'pdf', label: 'PDF', accept: '.pdf' },
@@ -423,10 +426,18 @@ const Index = () => {
 
         {/* Main Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 bg-white/80 backdrop-blur-sm">
+          <TabsList className="grid w-full grid-cols-5 bg-white/80 backdrop-blur-sm">
             <TabsTrigger value="convert" className="flex items-center gap-2">
               <RefreshCw className="h-4 w-4" />
               Converti
+            </TabsTrigger>
+            <TabsTrigger value="merge" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Unisci PDF
+            </TabsTrigger>
+            <TabsTrigger value="split" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Dividi PDF
             </TabsTrigger>
             <TabsTrigger value="summary" className="flex items-center gap-2">
               <Sparkles className="h-4 w-4" />
@@ -558,6 +569,287 @@ const Index = () => {
                     </p>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Merge PDF Tab */}
+          <TabsContent value="merge">
+            <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-purple-600">
+                  <FileText className="h-5 w-5" />
+                  Unisci PDF
+                </CardTitle>
+                <CardDescription>
+                  Seleziona più file PDF per unirli in un unico documento
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium mb-2">Seleziona file PDF (2-10 file):</label>
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (files.length < 2) {
+                        toast({
+                          title: "Errore",
+                          description: "Seleziona almeno 2 file PDF",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                      if (files.length > 10) {
+                        toast({
+                          title: "Errore",
+                          description: "Massimo 10 file PDF",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                      setPdfFiles(files);
+                      toast({
+                        title: "File caricati",
+                        description: `${files.length} file PDF selezionati`,
+                      });
+                    }}
+                    className="w-full p-2 border border-gray-300 rounded-lg"
+                  />
+                </div>
+
+                {pdfFiles.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="font-medium">File selezionati:</h4>
+                    {pdfFiles.map((file, index) => (
+                      <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                        <FileText className="h-4 w-4 text-red-600" />
+                        <span className="text-sm">{file.name}</span>
+                        <span className="text-xs text-gray-500">
+                          ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <Button 
+                  onClick={async () => {
+                    if (pdfFiles.length < 2) {
+                      toast({
+                        title: "Errore",
+                        description: "Seleziona almeno 2 file PDF",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+
+                    setIsProcessing(true);
+                    setError(null);
+
+                    try {
+                      const result = await mergePdfs(pdfFiles);
+                      
+                      if (result.success && result.downloadUrl && result.filename) {
+                        setConvertedFileUrl(result.downloadUrl);
+                        setConvertedFileName(result.filename);
+                        toast({
+                          title: "Unione completata!",
+                          description: "I PDF sono stati uniti con successo",
+                        });
+                      } else {
+                        setError(result.error || 'Errore durante l\'unione');
+                        toast({
+                          title: "Errore unione",
+                          description: result.error || 'Errore durante l\'unione',
+                          variant: "destructive",
+                        });
+                      }
+                    } catch (error) {
+                      const errorMessage = error instanceof Error ? error.message : 'Errore sconosciuto';
+                      setError(errorMessage);
+                      toast({
+                        title: "Errore",
+                        description: errorMessage,
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setIsProcessing(false);
+                    }
+                  }}
+                  className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800"
+                  disabled={pdfFiles.length < 2 || isProcessing}
+                >
+                  {isProcessing ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Unione in corso...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Unisci PDF
+                    </>
+                  )}
+                </Button>
+
+                {convertedFileUrl && convertedFileName && (
+                  <Button 
+                    onClick={handleDownload}
+                    variant="outline"
+                    className="flex items-center gap-2 ml-4"
+                  >
+                    <Download className="h-4 w-4" />
+                    Scarica {convertedFileName}
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Split PDF Tab */}
+          <TabsContent value="split">
+            <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-indigo-600">
+                  <FileText className="h-5 w-5" />
+                  Dividi PDF
+                </CardTitle>
+                <CardDescription>
+                  Dividi un PDF in più file specificando le pagine
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">File PDF:</label>
+                    <div className="p-3 bg-gray-50 border rounded-lg">
+                      {uploadedFile && uploadedFile.type === 'application/pdf' ? (
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-red-600" />
+                          <span className="text-sm">{uploadedFile.name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-500 text-sm">Carica un file PDF nella sezione principale</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Tipo di divisione:</label>
+                    <Select value={splitType} onValueChange={(value: 'pages' | 'range') => setSplitType(value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleziona tipo" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white">
+                        <SelectItem value="pages">Pagine specifiche</SelectItem>
+                        <SelectItem value="range">Range di pagine</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    {splitType === 'pages' ? 'Pagine (es: 1,3,5):' : 'Range (es: 1-3,5-7):'}
+                  </label>
+                  <input
+                    type="text"
+                    value={splitPages}
+                    onChange={(e) => setSplitPages(e.target.value)}
+                    placeholder={splitType === 'pages' ? '1,3,5' : '1-3,5-7'}
+                    className="w-full p-2 border border-gray-300 rounded-lg"
+                  />
+                </div>
+
+                <Button 
+                  onClick={async () => {
+                    if (!uploadedFile || uploadedFile.type !== 'application/pdf') {
+                      toast({
+                        title: "Errore",
+                        description: "Carica un file PDF",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+
+                    if (!splitPages.trim()) {
+                      toast({
+                        title: "Errore",
+                        description: "Specifica le pagine da estrarre",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+
+                    setIsProcessing(true);
+                    setError(null);
+
+                    try {
+                      let options: any = {};
+                      
+                      if (splitType === 'pages') {
+                        options.pages = splitPages;
+                      } else {
+                        // Converti range in formato array
+                        const ranges = splitPages.split(',').map(range => {
+                          const [start, end] = range.trim().split('-').map(n => parseInt(n));
+                          return { start, end: end || start };
+                        });
+                        options.pageRanges = ranges;
+                      }
+
+                      const result = await splitPdf(uploadedFile, splitType, options);
+                      
+                      if (result.success && result.files) {
+                        toast({
+                          title: "Divisione completata!",
+                          description: `PDF diviso in ${result.files.length} file`,
+                        });
+                        
+                        // Scarica tutti i file
+                        for (const file of result.files) {
+                          const response = await fetch(file.url);
+                          const blob = await response.blob();
+                          downloadFile(blob, file.filename);
+                        }
+                      } else {
+                        setError(result.error || 'Errore durante la divisione');
+                        toast({
+                          title: "Errore divisione",
+                          description: result.error || 'Errore durante la divisione',
+                          variant: "destructive",
+                        });
+                      }
+                    } catch (error) {
+                      const errorMessage = error instanceof Error ? error.message : 'Errore sconosciuto';
+                      setError(errorMessage);
+                      toast({
+                        title: "Errore",
+                        description: errorMessage,
+                        variant: "destructive",
+                      });
+                    } finally {
+                      setIsProcessing(false);
+                    }
+                  }}
+                  className="bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800"
+                  disabled={!uploadedFile || uploadedFile.type !== 'application/pdf' || !splitPages.trim() || isProcessing}
+                >
+                  {isProcessing ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Divisione in corso...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-4 w-4 mr-2" />
+                      Dividi PDF
+                    </>
+                  )}
+                </Button>
               </CardContent>
             </Card>
           </TabsContent>
