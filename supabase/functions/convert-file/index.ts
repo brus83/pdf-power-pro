@@ -59,65 +59,85 @@ Deno.serve(async (req) => {
     }
 
     console.log('Starting CloudConvert conversion')
+    console.log('Using API key (first 10 chars):', cloudConvertApiKey.substring(0, 10))
     
     try {
       // Converti il contenuto base64 in Uint8Array per l'upload
       const binaryData = Uint8Array.from(atob(fileContent), c => c.charCodeAt(0))
       const sourceExt = getExtensionFromFormat(sourceFormat)
       
-      // Crea un job di conversione
+      // Crea un job di conversione con la struttura corretta
+      const jobPayload = {
+        tasks: {
+          'upload-file': {
+            operation: 'import/upload'
+          },
+          'convert-file': {
+            operation: 'convert',
+            input: 'upload-file',
+            output_format: targetFormat
+          },
+          'export-file': {
+            operation: 'export/url',
+            input: 'convert-file'
+          }
+        }
+      }
+
+      console.log('Creating job with payload:', JSON.stringify(jobPayload, null, 2))
+
       const jobResponse = await fetch('https://api.cloudconvert.com/v2/jobs', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${cloudConvertApiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          tasks: {
-            'upload-file': {
-              operation: 'import/upload'
-            },
-            'convert-file': {
-              operation: 'convert',
-              input: 'upload-file',
-              output_format: targetFormat,
-              some_other_task: 'upload-file'
-            },
-            'export-file': {
-              operation: 'export/url',
-              input: 'convert-file'
-            }
-          }
-        })
+        body: JSON.stringify(jobPayload)
       })
 
+      const jobResponseText = await jobResponse.text()
+      console.log('Job response status:', jobResponse.status)
+      console.log('Job response:', jobResponseText)
+
       if (!jobResponse.ok) {
-        const error = await jobResponse.text()
-        console.error('CloudConvert job creation failed:', error)
-        throw new Error(`Errore nella creazione del job: ${jobResponse.status}`)
+        console.error('CloudConvert job creation failed:', jobResponseText)
+        return new Response(
+          JSON.stringify({ error: `Errore CloudConvert: ${jobResponse.status} - ${jobResponseText}` }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
       }
 
-      const jobData = await jobResponse.json()
-      console.log('Job created:', jobData.data.id)
+      const jobData = JSON.parse(jobResponseText)
+      console.log('Job created successfully:', jobData.data.id)
 
       // Upload del file
       const uploadTask = jobData.data.tasks.find((task: any) => task.name === 'upload-file')
+      if (!uploadTask || !uploadTask.result?.form) {
+        console.error('Upload task not found or invalid:', uploadTask)
+        throw new Error('Task di upload non trovato o non valido')
+      }
+
+      console.log('Uploading file to:', uploadTask.result.form.url)
+
+      const formData = new FormData()
+      Object.entries(uploadTask.result.form.parameters).forEach(([key, value]) => {
+        formData.append(key, value as string)
+      })
+      const blob = new Blob([binaryData], { type: getContentType(sourceExt) })
+      formData.append('file', blob, fileName)
+
       const uploadResponse = await fetch(uploadTask.result.form.url, {
         method: 'POST',
-        body: (() => {
-          const formData = new FormData()
-          Object.entries(uploadTask.result.form.parameters).forEach(([key, value]) => {
-            formData.append(key, value as string)
-          })
-          const blob = new Blob([binaryData], { type: getContentType(sourceExt) })
-          formData.append('file', blob, fileName)
-          return formData
-        })()
+        body: formData
       })
 
       if (!uploadResponse.ok) {
-        console.error('Upload failed:', await uploadResponse.text())
-        throw new Error('Errore durante l\'upload del file')
+        const uploadError = await uploadResponse.text()
+        console.error('Upload failed:', uploadError)
+        throw new Error(`Errore durante l'upload: ${uploadResponse.status}`)
       }
 
       console.log('File uploaded successfully')
@@ -140,6 +160,14 @@ Deno.serve(async (req) => {
           const statusData = await statusResponse.json()
           jobStatus = statusData.data.status
           console.log(`Job status: ${jobStatus} (attempt ${attempts + 1})`)
+          
+          if (statusData.data.tasks) {
+            const errorTask = statusData.data.tasks.find((task: any) => task.status === 'error')
+            if (errorTask) {
+              console.error('Task error:', errorTask)
+              throw new Error(`Errore nella conversione: ${errorTask.message || 'Errore sconosciuto'}`)
+            }
+          }
         }
         
         attempts++
@@ -164,6 +192,7 @@ Deno.serve(async (req) => {
       const exportTask = finalJobData.data.tasks.find((task: any) => task.name === 'export-file')
       
       if (!exportTask?.result?.files?.[0]?.url) {
+        console.error('Export task result:', exportTask)
         throw new Error('File convertito non trovato')
       }
 
