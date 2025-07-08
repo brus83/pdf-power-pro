@@ -25,6 +25,8 @@ export const convertFile = async (
   targetFormat: string
 ): Promise<ConversionResult> => {
   try {
+    console.log('Starting file conversion:', { fileName: file.name, targetFormat, fileSize: file.size })
+    
     const base64Content = await convertFileToBase64(file);
     
     const { data, error } = await supabase.functions.invoke('convert-file', {
@@ -38,10 +40,38 @@ export const convertFile = async (
     });
 
     if (error) {
-      console.error('Conversion error:', error);
-      return { success: false, error: error.message };
+      console.error('Conversion error details:', error);
+      
+      // Gestione migliorata degli errori
+      let errorMessage = 'Errore durante la conversione del file';
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.context?.body) {
+        try {
+          let bodyContent = error.context.body;
+          
+          if (bodyContent instanceof Uint8Array) {
+            const decoder = new TextDecoder();
+            bodyContent = decoder.decode(bodyContent);
+          }
+          
+          const errorBody = typeof bodyContent === 'string' 
+            ? JSON.parse(bodyContent) 
+            : bodyContent;
+            
+          if (errorBody.error) {
+            errorMessage = errorBody.error;
+          }
+        } catch (parseError) {
+          console.error('Failed to parse error body:', parseError);
+        }
+      }
+      
+      return { success: false, error: errorMessage };
     }
 
+    console.log('Conversion successful:', data);
     return {
       success: true,
       downloadUrl: data.downloadUrl,
