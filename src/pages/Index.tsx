@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
 import { toast } from '@/hooks/use-toast';
 import { convertFile, translateDocument, summarizeDocument } from '@/services/fileService';
 import { downloadFile } from '@/lib/fileUtils';
@@ -20,6 +21,7 @@ const Index = () => {
   const [convertedFileUrl, setConvertedFileUrl] = useState<string | null>(null);
   const [convertedFileName, setConvertedFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [conversionProgress, setConversionProgress] = useState(0);
 
   const supportedFormats = [
     { value: 'pdf', label: 'PDF', accept: '.pdf' },
@@ -30,7 +32,17 @@ const Index = () => {
     { value: 'html', label: 'HTML (.html)', accept: '.html,.htm' },
     { value: 'csv', label: 'CSV (.csv)', accept: '.csv' },
     { value: 'json', label: 'JSON (.json)', accept: '.json' },
-    { value: 'xml', label: 'XML (.xml)', accept: '.xml' }
+    { value: 'xml', label: 'XML (.xml)', accept: '.xml' },
+    { value: 'jpg', label: 'JPEG (.jpg)', accept: '.jpg,.jpeg' },
+    { value: 'png', label: 'PNG (.png)', accept: '.png' },
+    { value: 'gif', label: 'GIF (.gif)', accept: '.gif' },
+    { value: 'bmp', label: 'BMP (.bmp)', accept: '.bmp' },
+    { value: 'tiff', label: 'TIFF (.tiff,.tif)', accept: '.tiff,.tif' },
+    { value: 'webp', label: 'WebP (.webp)', accept: '.webp' },
+    { value: 'rtf', label: 'RTF (.rtf)', accept: '.rtf' },
+    { value: 'odt', label: 'OpenDocument Text (.odt)', accept: '.odt' },
+    { value: 'ods', label: 'OpenDocument Spreadsheet (.ods)', accept: '.ods' },
+    { value: 'odp', label: 'OpenDocument Presentation (.odp)', accept: '.odp' }
   ];
 
   const languages = [
@@ -57,6 +69,16 @@ const Index = () => {
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      // Controllo dimensione file (100MB)
+      if (file.size > 100 * 1024 * 1024) {
+        toast({
+          title: "File troppo grande",
+          description: "Il file non può superare i 100MB",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const fileType = getFileType(file.name);
       if (fileType !== 'unknown') {
         setUploadedFile(file);
@@ -65,6 +87,7 @@ const Index = () => {
         setConvertedFileName(null);
         setSummary('');
         setTranslation('');
+        setConversionProgress(0);
         toast({
           title: "File caricato con successo!",
           description: `File: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`,
@@ -112,21 +135,32 @@ const Index = () => {
 
     setIsProcessing(true);
     setError(null);
+    setConversionProgress(0);
     
     toast({
       title: "Conversione avviata",
-      description: "Stiamo convertendo il tuo file...",
+      description: "Stiamo convertendo il tuo file... Questo potrebbe richiedere alcuni minuti per file grandi.",
     });
+
+    // Simula progresso durante la conversione
+    const progressInterval = setInterval(() => {
+      setConversionProgress(prev => {
+        if (prev < 90) return prev + 10;
+        return prev;
+      });
+    }, 3000);
 
     try {
       const result = await convertFile(uploadedFile, targetFormat);
+      clearInterval(progressInterval);
+      setConversionProgress(100);
       
       if (result.success && result.downloadUrl && result.filename) {
         setConvertedFileUrl(result.downloadUrl);
         setConvertedFileName(result.filename);
         toast({
           title: "Conversione completata!",
-          description: `File convertito con successo`,
+          description: `File convertito con successo in ${targetFormat.toUpperCase()}`,
         });
       } else {
         setError(result.error || 'Errore durante la conversione');
@@ -137,6 +171,7 @@ const Index = () => {
         });
       }
     } catch (error) {
+      clearInterval(progressInterval);
       const errorMessage = error instanceof Error ? error.message : 'Errore sconosciuto';
       setError(errorMessage);
       toast({
@@ -290,24 +325,22 @@ const Index = () => {
               <h1 className="text-2xl font-bold text-gray-800">
                 Universal File Converter Pro
               </h1>
-              <p className="text-sm text-gray-600">Converti, Riassumi, Traduci qualsiasi formato</p>
+              <p className="text-sm text-gray-600">Converti, Riassumi, Traduci qualsiasi formato - Fino a 100MB</p>
             </div>
           </div>
         </div>
       </div>
 
       <div className="container mx-auto px-4 py-8 max-w-6xl">
-        {/* Setup Notice */}
-        <Alert className="mb-6 border-blue-200 bg-blue-50">
-          <AlertCircle className="h-4 w-4 text-blue-600" />
-          <AlertDescription className="text-blue-800">
-            <strong>Configurazione richiesta:</strong> Per utilizzare le funzionalità reali, configura Supabase e le API keys.
+        {/* Success Notice */}
+        <Alert className="mb-6 border-green-200 bg-green-50">
+          <AlertCircle className="h-4 w-4 text-green-600" />
+          <AlertDescription className="text-green-800">
+            <strong>✅ CloudConvert integrato!</strong> Ora puoi convertire tutti i formati di file inclusi PDF, Word, Excel, PowerPoint, immagini e molto altro.
             <br />
-            1. Crea un progetto Supabase
+            <strong>Dimensione massima:</strong> 100MB per file
             <br />
-            2. Configura le Edge Functions
-            <br />
-            3. Ottieni API keys per CloudConvert (conversione) e MyMemory (traduzione)
+            <strong>Formati supportati:</strong> PDF, DOCX, XLSX, PPTX, JPG, PNG, GIF, HTML, TXT, CSV, JSON, XML, RTF, ODT e molti altri
           </AlertDescription>
         </Alert>
 
@@ -329,14 +362,37 @@ const Index = () => {
               Carica il tuo file
             </CardTitle>
             <CardDescription>
-              Supporta PDF, Word, PowerPoint, Excel, Testo, HTML, CSV, JSON, XML
+              Supporta tutti i formati principali - PDF, Office, immagini, testo e molto altro (max 100MB)
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div
               className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors cursor-pointer bg-gray-50/50"
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                  const file = files[0];
+                  if (file.size > 100 * 1024 * 1024) {
+                    toast({
+                      title: "File troppo grande",
+                      description: "Il file non può superare i 100MB",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  const fileType = getFileType(file.name);
+                  if (fileType !== 'unknown') {
+                    setUploadedFile(file);
+                    setError(null);
+                    toast({
+                      title: "File caricato con successo!",
+                      description: `File: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`,
+                    });
+                  }
+                }
+              }}
               onClick={() => document.getElementById('file-upload')?.click()}
             >
               <Upload className="h-12 w-12 mx-auto mb-4 text-gray-400" />
@@ -346,7 +402,7 @@ const Index = () => {
               <p className="text-sm text-gray-500 mb-2">
                 {uploadedFile 
                   ? `Dimensione: ${(uploadedFile.size / 1024 / 1024).toFixed(2)} MB - Tipo: ${getFileType(uploadedFile.name).toUpperCase()}`
-                  : 'Formati supportati: PDF, DOCX, PPTX, XLSX, TXT, HTML, CSV, JSON, XML'
+                  : 'Tutti i formati supportati - Dimensione massima: 100MB'
                 }
               </p>
               {uploadedFile && (
@@ -388,10 +444,10 @@ const Index = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-blue-600">
                   <RefreshCw className="h-5 w-5" />
-                  Conversione File
+                  Conversione File Universale
                 </CardTitle>
                 <CardDescription>
-                  Converti il tuo file in un altro formato
+                  Converti il tuo file in qualsiasi formato supportato da CloudConvert
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -419,7 +475,7 @@ const Index = () => {
                       <SelectTrigger>
                         <SelectValue placeholder="Seleziona formato di destinazione" />
                       </SelectTrigger>
-                      <SelectContent className="bg-white">
+                      <SelectContent className="bg-white max-h-60 overflow-y-auto">
                         {availableFormats.map((format) => (
                           <SelectItem key={format.value} value={format.value}>
                             {format.label}
@@ -430,6 +486,17 @@ const Index = () => {
                   </div>
                 </div>
 
+                {/* Progress Bar */}
+                {isProcessing && (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Conversione in corso...</span>
+                      <span className="text-sm text-gray-600">{conversionProgress}%</span>
+                    </div>
+                    <Progress value={conversionProgress} className="w-full" />
+                  </div>
+                )}
+
                 <div className="flex gap-4">
                   <Button 
                     onClick={handleConvert}
@@ -439,7 +506,7 @@ const Index = () => {
                     {isProcessing ? (
                       <>
                         <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                        Conversione in corso...
+                        Conversione con CloudConvert...
                       </>
                     ) : (
                       <>
@@ -451,7 +518,24 @@ const Index = () => {
 
                   {convertedFileUrl && convertedFileName && (
                     <Button 
-                      onClick={handleDownload}
+                      onClick={async () => {
+                        try {
+                          const response = await fetch(convertedFileUrl);
+                          const blob = await response.blob();
+                          downloadFile(blob, convertedFileName);
+                          
+                          toast({
+                            title: "Download completato",
+                            description: `File ${convertedFileName} scaricato`,
+                          });
+                        } catch (error) {
+                          toast({
+                            title: "Errore download",
+                            description: "Impossibile scaricare il file",
+                            variant: "destructive",
+                          });
+                        }
+                      }}
                       variant="outline"
                       className="flex items-center gap-2"
                     >
@@ -469,6 +553,9 @@ const Index = () => {
                         File convertito con successo: {convertedFileName}
                       </p>
                     </div>
+                    <p className="text-green-600 text-sm mt-1">
+                      Conversione completata tramite CloudConvert
+                    </p>
                   </div>
                 )}
               </CardContent>
