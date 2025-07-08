@@ -20,6 +20,19 @@ export interface SummaryResult {
   error?: string;
 }
 
+export interface MergePdfResult {
+  success: boolean;
+  downloadUrl?: string;
+  filename?: string;
+  error?: string;
+}
+
+export interface SplitPdfResult {
+  success: boolean;
+  files?: Array<{ url: string; filename: string }>;
+  error?: string;
+}
+
 export const convertFile = async (
   file: File, 
   targetFormat: string
@@ -198,6 +211,89 @@ export const summarizeDocument = async (file: File): Promise<SummaryResult> => {
     return { 
       success: false, 
       error: error instanceof Error ? error.message : 'Riassunto fallito' 
+    };
+  }
+};
+
+export const mergePdfs = async (files: File[]): Promise<MergePdfResult> => {
+  try {
+    console.log('Starting PDF merge:', { fileCount: files.length });
+    
+    if (files.length < 2) {
+      return { success: false, error: 'Sono necessari almeno 2 file PDF per unire' };
+    }
+    
+    if (files.length > 10) {
+      return { success: false, error: 'Massimo 10 file PDF possono essere uniti' };
+    }
+    
+    // Converti tutti i file in base64
+    const fileContents = await Promise.all(
+      files.map(async (file) => ({
+        content: await convertFileToBase64(file),
+        filename: file.name
+      }))
+    );
+    
+    const { data, error } = await supabase.functions.invoke('merge-pdf', {
+      body: {
+        files: fileContents
+      }
+    });
+
+    if (error) {
+      console.error('PDF merge error:', error);
+      return { success: false, error: error.message };
+    }
+
+    return {
+      success: true,
+      downloadUrl: data.downloadUrl,
+      filename: data.filename
+    };
+  } catch (error) {
+    console.error('PDF merge failed:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unione PDF fallita' 
+    };
+  }
+};
+
+export const splitPdf = async (
+  file: File, 
+  splitType: 'pages' | 'range',
+  options: { pages?: string; pageRanges?: Array<{ start: number; end: number }> }
+): Promise<SplitPdfResult> => {
+  try {
+    console.log('Starting PDF split:', { fileName: file.name, splitType, options });
+    
+    const base64Content = await convertFileToBase64(file);
+    
+    const { data, error } = await supabase.functions.invoke('split-pdf', {
+      body: {
+        fileContent: base64Content,
+        fileName: file.name,
+        splitType: splitType,
+        pages: options.pages,
+        pageRanges: options.pageRanges
+      }
+    });
+
+    if (error) {
+      console.error('PDF split error:', error);
+      return { success: false, error: error.message };
+    }
+
+    return {
+      success: true,
+      files: data.files
+    };
+  } catch (error) {
+    console.error('PDF split failed:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Divisione PDF fallita' 
     };
   }
 };
