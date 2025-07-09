@@ -55,8 +55,8 @@ export const convertFile = async (
     if (error) {
       console.error('Conversion error details:', error);
       
-      // Gestione migliorata degli errori
-      let errorMessage = 'Si è verificato un errore durante la conversione del file. Riprova più tardi.';
+      // Gestione migliorata degli errori con più dettagli
+      let errorMessage = 'Si è verificato un errore durante la conversione del file.';
       
       if (error.message) {
         errorMessage = error.message;
@@ -75,11 +75,18 @@ export const convertFile = async (
             
           if (errorBody.error) {
             errorMessage = errorBody.error;
+          } else if (errorBody.details) {
+            errorMessage = `${errorMessage} Dettagli: ${errorBody.details}`;
           }
         } catch (parseError) {
           console.error('Failed to parse error body:', parseError);
           // Mantieni il messaggio user-friendly se il parsing fallisce
         }
+      }
+      
+      // Se abbiamo ancora un messaggio generico, aggiungi suggerimenti
+      if (errorMessage === 'Si è verificato un errore durante la conversione del file.') {
+        errorMessage += ' Verifica che il file sia valido e non corrotto. Per file PDF, Word, Excel usa CloudConvert API.';
       }
       
       return { success: false, error: errorMessage };
@@ -95,7 +102,9 @@ export const convertFile = async (
     console.error('File conversion failed:', error);
     return { 
       success: false, 
-      error: error instanceof Error ? error.message : 'Conversione fallita. Verifica che il file sia valido e riprova.' 
+      error: error instanceof Error 
+        ? `Conversione fallita: ${error.message}` 
+        : 'Conversione fallita. Verifica che il file sia valido e riprova.' 
     };
   }
 };

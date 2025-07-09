@@ -13,20 +13,28 @@ interface ConversionRequest {
 }
 
 Deno.serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { fileContent, fileName, sourceFormat, targetFormat, fileSize }: ConversionRequest = await req.json()
-    
-    console.log('Conversion request:', { fileName, sourceFormat, targetFormat, fileSize })
+    console.log('=== CONVERSION REQUEST START ===')
+    console.log('Method:', req.method)
+    console.log('Headers:', Object.fromEntries(req.headers.entries()))
 
-    // Validazione input
-    if (!fileContent || !fileName || !targetFormat) {
-      console.error('Missing parameters:', { fileContent: !!fileContent, fileName, targetFormat })
+    // Parse request body with error handling
+    let requestBody: ConversionRequest
+    try {
+      requestBody = await req.json()
+      console.log('Request parsed successfully')
+    } catch (parseError) {
+      console.error('Failed to parse request body:', parseError)
       return new Response(
-        JSON.stringify({ error: 'Parametri mancanti: fileContent, fileName e targetFormat sono richiesti' }),
+        JSON.stringify({ 
+          error: 'Richiesta non valida: impossibile leggere i dati del file',
+          details: parseError.message 
+        }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -34,8 +42,53 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Limite dimensione file aumentato a 100MB
-    if (fileSize > 100 * 1024 * 1024) {
+    const { fileContent, fileName, sourceFormat, targetFormat, fileSize } = requestBody
+    
+    console.log('Conversion request details:', { 
+      fileName, 
+      sourceFormat, 
+      targetFormat, 
+      fileSize,
+      contentLength: fileContent ? fileContent.length : 0
+    })
+
+    // Validazione input più robusta
+    if (!fileContent) {
+      console.error('Missing fileContent')
+      return new Response(
+        JSON.stringify({ error: 'Contenuto del file mancante' }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    if (!fileName) {
+      console.error('Missing fileName')
+      return new Response(
+        JSON.stringify({ error: 'Nome del file mancante' }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    if (!targetFormat) {
+      console.error('Missing targetFormat')
+      return new Response(
+        JSON.stringify({ error: 'Formato di destinazione mancante' }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    // Limite dimensione file
+    if (fileSize && fileSize > 100 * 1024 * 1024) {
+      console.error('File too large:', fileSize)
       return new Response(
         JSON.stringify({ error: 'File troppo grande. Limite: 100MB' }),
         { 
@@ -45,56 +98,93 @@ Deno.serve(async (req) => {
       )
     }
 
-    // CloudConvert API Key - Sostituisci con la tua chiave API valida
-    const cloudConvertApiKey = Deno.env.get('CLOUDCONVERT_API_KEY') || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiMGFlYTMyN2IzOWFkMjRhMjA0NmE0MDMyZDQ5YjBhYWE3ZDYzZTkwYzRmN2Y5Njk2YWI2YjA3OTBlMDFjMDcxYjRhMDU3ZThmZjA1ODJmZDAiLCJpYXQiOjE3NTE5NTk0NzAuMzIzMjU2LCJuYmYiOjE3NTE5NTk0NzAuMzIzMjU3LCJleHAiOjQ5MDc2MzMwNzAuMzE4NzQ2LCJzdWIiOiI3MjM1OTE1NyIsInNjb3BlcyI6WyJ1c2VyLnJlYWQiLCJ1c2VyLndyaXRlIiwidGFzay5yZWFkIiwidGFzay53cml0ZSIsIndlYmhvb2sucmVhZCIsIndlYmhvb2sud3JpdGUiLCJwcmVzZXQucmVhZCIsInByZXNldC53cml0ZSJdfQ.bRuTPzbOMNMX-yXH9IBkHiGBr8eZkhSF4ipuAmFVg_ymE87DQ1W2BwbYi8hFp9CeztgRa2xxbsaa_AtpaxKa_IkIXULQFVOhu5rh3ujLAPwH6X3-W5FD1CQofPhe4HXrLuqrOUvr6IoiiirvBfc3h842VBACzQe6CZvysGRtdub5Re2BPO4gJUNosawI1tXKzxpVp3pEgeQ28DCM7AO9bmSzva-7pCODRS3_RMBg0jTpKP7LDA2TfEKtWWvD-BKk0M-jG5pQeVjqLfhjG1Gu_t0SZdq-c2Q3UIG-H_IegJ0FJ01UqfdQIbxFz9_F5swiMFwU7Jn6XbyeQ-bximoMMInzxP2WtcU8QiwaB3dHSEmEiSHvFdPd7htKLzsgFjBMfqHbdLs4eVwONzlrpAP8Fc4awUBiCOHtzN6jlIrYja-PWEgT7VaJmfoqjlewkIMvNjBN3bG1BzxI-jvLCcHWyub7oI-wwYuL7m1qyTOVZ6n-BdMwmARI7E9c8DCh0MybubicAHsTqKiYYMj2hbNgcfSjdoGGi_MAGRGbWVo3Tl2jOKWTmJmqpv7nkMGbQ9d_4zRKa3DbiBaCmkhpAwLTn_ZQ1AB4qJ2KnHfNVVh5NavKjmCLaEsxaxyqIpHUqhUPELpAiJaF-3A5l7v8PrFiCEGhoChUPHjxrZ_ZZhS8QOA'
-    
+    // Determina il formato sorgente
     const sourceExt = getExtensionFromFormat(sourceFormat)
-    
-    // Se non c'è la chiave API o per conversioni semplici, usa conversioni locali
-    if (!cloudConvertApiKey || cloudConvertApiKey.length < 50) {
-      console.log('CloudConvert API key not available, using simple conversions')
-      
-      if (['txt', 'html', 'csv', 'json', 'xml'].includes(sourceExt) && 
-          ['txt', 'html', 'csv', 'json', 'xml'].includes(targetFormat)) {
+    console.log('Source extension:', sourceExt, 'Target format:', targetFormat)
+
+    // Verifica se è una conversione semplice supportata
+    const isSimpleConversion = ['txt', 'html', 'csv', 'json', 'xml'].includes(sourceExt) && 
+                              ['txt', 'html', 'csv', 'json', 'xml'].includes(targetFormat)
+
+    console.log('Is simple conversion:', isSimpleConversion)
+
+    if (isSimpleConversion) {
+      console.log('Attempting simple conversion...')
+      try {
+        const result = await performSimpleConversion(fileContent, fileName, sourceFormat, targetFormat)
         
-        try {
-          const result = await performSimpleConversion(fileContent, fileName, sourceFormat, targetFormat)
-          
-          if (result.success) {
-            return new Response(
-              JSON.stringify({
-                success: true,
-                downloadUrl: result.downloadUrl,
-                filename: result.filename
-              }),
-              { 
-                status: 200, 
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-              }
-            )
-          } else {
-            return new Response(
-              JSON.stringify({ error: result.error }),
-              { 
-                status: 400, 
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-              }
-            )
-          }
-        } catch (conversionError) {
-          console.error('Simple conversion failed:', conversionError)
+        if (result.success) {
+          console.log('Simple conversion successful')
           return new Response(
-            JSON.stringify({ error: `Errore durante la conversione: ${conversionError.message}` }),
+            JSON.stringify({
+              success: true,
+              downloadUrl: result.downloadUrl,
+              filename: result.filename
+            }),
             { 
-              status: 500, 
+              status: 200, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          )
+        } else {
+          console.error('Simple conversion failed:', result.error)
+          return new Response(
+            JSON.stringify({ error: result.error }),
+            { 
+              status: 400, 
               headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
             }
           )
         }
-      } else {
+      } catch (conversionError) {
+        console.error('Simple conversion exception:', conversionError)
         return new Response(
           JSON.stringify({ 
-            error: 'CloudConvert API key non configurata. Per conversioni PDF, Office e immagini è necessaria la configurazione di CloudConvert. Attualmente supportate solo conversioni tra formati di testo (TXT, HTML, CSV, JSON, XML).' 
+            error: `Errore durante la conversione: ${conversionError.message}`,
+            type: 'conversion_error'
+          }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+    }
+
+    // Per conversioni avanzate, verifica CloudConvert API
+    const cloudConvertApiKey = Deno.env.get('CLOUDCONVERT_API_KEY')
+    console.log('CloudConvert API key available:', !!cloudConvertApiKey)
+
+    if (!cloudConvertApiKey) {
+      console.log('CloudConvert API key not available')
+      return new Response(
+        JSON.stringify({ 
+          error: 'CloudConvert API non configurata. Conversioni supportate senza API: TXT ↔ HTML/CSV/JSON/XML, CSV ↔ JSON/XML/HTML, JSON ↔ CSV/XML/TXT, XML ↔ JSON/TXT, HTML → TXT',
+          supportedFormats: ['txt', 'html', 'csv', 'json', 'xml'],
+          currentFormat: sourceExt
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    console.log('Starting CloudConvert conversion...')
+    
+    try {
+      // Decodifica base64 con gestione errori
+      let binaryData: Uint8Array
+      try {
+        console.log('Decoding base64 content...')
+        binaryData = Uint8Array.from(atob(fileContent), c => c.charCodeAt(0))
+        console.log('Base64 decoded successfully, size:', binaryData.length)
+      } catch (decodeError) {
+        console.error('Base64 decode error:', decodeError)
+        return new Response(
+          JSON.stringify({ 
+            error: 'Errore nella decodifica del file. Il file potrebbe essere corrotto.',
+            details: decodeError.message
           }),
           { 
             status: 400, 
@@ -102,27 +192,8 @@ Deno.serve(async (req) => {
           }
         )
       }
-    }
-
-    console.log('Starting CloudConvert conversion')
-    
-    try {
-      // Converti il contenuto base64 in Uint8Array per l'upload
-      let binaryData: Uint8Array
-      try {
-        binaryData = Uint8Array.from(atob(fileContent), c => c.charCodeAt(0))
-      } catch (decodeError) {
-        console.error('Base64 decode error:', decodeError)
-        return new Response(
-          JSON.stringify({ error: 'Errore nella decodifica del file. Assicurati che il file sia valido.' }),
-          { 
-            status: 400, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-          }
-        )
-      }
       
-      // Crea un job di conversione con la struttura corretta
+      // Crea job CloudConvert
       const jobPayload = {
         tasks: {
           'upload-file': {
@@ -131,14 +202,7 @@ Deno.serve(async (req) => {
           'convert-file': {
             operation: 'convert',
             input: 'upload-file',
-            output_format: targetFormat,
-            // Opzioni specifiche per migliorare la conversione
-            ...(sourceExt === 'pdf' && targetFormat === 'pptx' && {
-              engine: 'office'
-            }),
-            ...(targetFormat === 'pdf' && {
-              engine: 'office'
-            })
+            output_format: targetFormat
           },
           'export-file': {
             operation: 'export/url',
@@ -147,7 +211,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      console.log('Creating job with payload:', JSON.stringify(jobPayload, null, 2))
+      console.log('Creating CloudConvert job...')
 
       const jobResponse = await fetch('https://api.cloudconvert.com/v2/jobs', {
         method: 'POST',
@@ -157,6 +221,8 @@ Deno.serve(async (req) => {
         },
         body: JSON.stringify(jobPayload)
       })
+
+      console.log('Job response status:', jobResponse.status)
 
       if (!jobResponse.ok) {
         const jobResponseText = await jobResponse.text()
@@ -171,11 +237,14 @@ Deno.serve(async (req) => {
             errorMessage = errorData.error
           }
         } catch (parseError) {
-          console.error('Could not parse error response:', parseError)
+          console.error('Could not parse CloudConvert error response')
         }
         
         return new Response(
-          JSON.stringify({ error: `CloudConvert Error: ${errorMessage}` }),
+          JSON.stringify({ 
+            error: `CloudConvert Error: ${errorMessage}`,
+            status: jobResponse.status
+          }),
           { 
             status: 500, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -213,11 +282,16 @@ Deno.serve(async (req) => {
         body: formData
       })
 
+      console.log('Upload response status:', uploadResponse.status)
+
       if (!uploadResponse.ok) {
         const uploadError = await uploadResponse.text()
         console.error('Upload failed:', uploadResponse.status, uploadError)
         return new Response(
-          JSON.stringify({ error: `Errore durante l'upload del file: ${uploadResponse.status}` }),
+          JSON.stringify({ 
+            error: `Errore durante l'upload del file: ${uploadResponse.status}`,
+            details: uploadError
+          }),
           { 
             status: 500, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -230,37 +304,44 @@ Deno.serve(async (req) => {
       // Attendi il completamento della conversione
       let jobStatus = 'waiting'
       let attempts = 0
-      const maxAttempts = 60 // 10 minuti di attesa massima
+      const maxAttempts = 30 // 5 minuti di attesa
       
       while (jobStatus !== 'finished' && jobStatus !== 'error' && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 10000)) // Attendi 10 secondi
         
-        const statusResponse = await fetch(`https://api.cloudconvert.com/v2/jobs/${jobData.data.id}`, {
-          headers: {
-            'Authorization': `Bearer ${cloudConvertApiKey}`,
-          }
-        })
-
-        if (statusResponse.ok) {
-          const statusData = await statusResponse.json()
-          jobStatus = statusData.data.status
-          console.log(`Job status: ${jobStatus} (attempt ${attempts + 1}/${maxAttempts})`)
-          
-          if (statusData.data.tasks) {
-            const errorTask = statusData.data.tasks.find((task: any) => task.status === 'error')
-            if (errorTask) {
-              console.error('Task error:', errorTask)
-              return new Response(
-                JSON.stringify({ error: `Errore nella conversione: ${errorTask.message || 'Formato non supportato o file corrotto'}` }),
-                { 
-                  status: 400, 
-                  headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-                }
-              )
+        try {
+          const statusResponse = await fetch(`https://api.cloudconvert.com/v2/jobs/${jobData.data.id}`, {
+            headers: {
+              'Authorization': `Bearer ${cloudConvertApiKey}`,
             }
+          })
+
+          if (statusResponse.ok) {
+            const statusData = await statusResponse.json()
+            jobStatus = statusData.data.status
+            console.log(`Job status: ${jobStatus} (attempt ${attempts + 1}/${maxAttempts})`)
+            
+            if (statusData.data.tasks) {
+              const errorTask = statusData.data.tasks.find((task: any) => task.status === 'error')
+              if (errorTask) {
+                console.error('Task error:', errorTask)
+                return new Response(
+                  JSON.stringify({ 
+                    error: `Errore nella conversione: ${errorTask.message || 'Formato non supportato o file corrotto'}`,
+                    taskError: errorTask
+                  }),
+                  { 
+                    status: 400, 
+                    headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+                  }
+                )
+              }
+            }
+          } else {
+            console.error('Status check failed:', statusResponse.status)
           }
-        } else {
-          console.error('Status check failed:', statusResponse.status)
+        } catch (statusError) {
+          console.error('Status check exception:', statusError)
         }
         
         attempts++
@@ -278,7 +359,11 @@ Deno.serve(async (req) => {
 
       if (jobStatus !== 'finished') {
         return new Response(
-          JSON.stringify({ error: 'Timeout durante la conversione del file. Il file potrebbe essere troppo grande o complesso.' }),
+          JSON.stringify({ 
+            error: 'Timeout durante la conversione del file. Il file potrebbe essere troppo grande o complesso.',
+            status: jobStatus,
+            attempts: attempts
+          }),
           { 
             status: 408, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -336,10 +421,13 @@ Deno.serve(async (req) => {
         }
       )
 
-    } catch (error) {
-      console.error('CloudConvert conversion failed:', error)
+    } catch (cloudConvertError) {
+      console.error('CloudConvert conversion failed:', cloudConvertError)
       return new Response(
-        JSON.stringify({ error: `Errore durante la conversione: ${error.message}` }),
+        JSON.stringify({ 
+          error: `Errore durante la conversione: ${cloudConvertError.message}`,
+          type: 'cloudconvert_error'
+        }),
         { 
           status: 500, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -347,10 +435,17 @@ Deno.serve(async (req) => {
       )
     }
 
-  } catch (error) {
-    console.error('Conversion error:', error)
+  } catch (globalError) {
+    console.error('=== GLOBAL ERROR ===')
+    console.error('Error type:', globalError.constructor.name)
+    console.error('Error message:', globalError.message)
+    console.error('Error stack:', globalError.stack)
+    
     return new Response(
-      JSON.stringify({ error: `Errore interno del server: ${error.message}` }),
+      JSON.stringify({ 
+        error: `Errore interno del server: ${globalError.message}`,
+        type: 'internal_error'
+      }),
       { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -367,20 +462,30 @@ async function performSimpleConversion(
 ): Promise<{ success: boolean; downloadUrl?: string; filename?: string; error?: string }> {
   
   try {
-    console.log('Performing simple conversion:', { fileName, sourceFormat, targetFormat })
+    console.log('=== SIMPLE CONVERSION START ===')
+    console.log('Converting:', { fileName, sourceFormat, targetFormat })
     
     // Decodifica il contenuto base64
     let decodedContent: string
     try {
       decodedContent = atob(fileContent)
+      console.log('Content decoded, length:', decodedContent.length)
     } catch (decodeError) {
-      console.error('Base64 decode error:', decodeError)
+      console.error('Base64 decode error in simple conversion:', decodeError)
       return { success: false, error: 'Errore nella decodifica del file' }
+    }
+
+    // Verifica che il contenuto non sia vuoto
+    if (!decodedContent || decodedContent.trim().length === 0) {
+      console.error('Empty content after decode')
+      return { success: false, error: 'Il file sembra essere vuoto' }
     }
 
     const sourceExt = getExtensionFromFormat(sourceFormat)
     const originalName = fileName.split('.')[0]
     const newFileName = `${originalName}.${targetFormat}`
+
+    console.log('Source extension:', sourceExt, 'Target format:', targetFormat)
 
     // Conversioni supportate
     const supportedConversions = [
@@ -411,13 +516,17 @@ async function performSimpleConversion(
     const conversion = supportedConversions.find(c => c.from === sourceExt && c.to === targetFormat)
     
     if (!conversion) {
+      console.error('Conversion not supported:', sourceExt, 'to', targetFormat)
       return { 
         success: false, 
-        error: `Conversione da ${sourceExt.toUpperCase()} a ${targetFormat.toUpperCase()} non supportata senza CloudConvert API. Formati supportati: TXT, HTML, CSV, JSON, XML` 
+        error: `Conversione da ${sourceExt.toUpperCase()} a ${targetFormat.toUpperCase()} non supportata. Formati supportati: TXT, HTML, CSV, JSON, XML` 
       }
     }
 
+    console.log('Performing conversion with converter function...')
     const convertedContent = conversion.converter(decodedContent)
+    console.log('Conversion completed, result length:', convertedContent.length)
+    
     const base64Content = btoa(convertedContent)
     const mimeType = getMimeType(targetFormat)
     const dataUrl = `data:${mimeType};base64,${base64Content}`
@@ -435,10 +544,10 @@ async function performSimpleConversion(
   }
 }
 
-// Funzioni di conversione semplici
+// Funzioni di conversione semplici (migliorate)
 function convertTxtToHtml(content: string): string {
   const lines = content.split('\n')
-  const htmlContent = lines.map(line => `<p>${escapeHtml(line)}</p>`).join('\n')
+  const htmlContent = lines.map(line => `<p>${escapeHtml(line || '&nbsp;')}</p>`).join('\n')
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -450,6 +559,7 @@ function convertTxtToHtml(content: string): string {
     </style>
 </head>
 <body>
+    <h1>Converted Text Document</h1>
     ${htmlContent}
 </body>
 </html>`
@@ -461,12 +571,13 @@ function convertTxtToCsv(content: string): string {
 }
 
 function convertTxtToJson(content: string): string {
-  const lines = content.split('\n').filter(line => line.trim())
+  const lines = content.split('\n')
   return JSON.stringify({ 
     document: {
       title: "Converted Text Document",
       lines: lines,
-      totalLines: lines.length
+      totalLines: lines.length,
+      convertedAt: new Date().toISOString()
     }
   }, null, 2)
 }
@@ -477,6 +588,7 @@ function convertTxtToXml(content: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <document>
   <title>Converted Text Document</title>
+  <convertedAt>${new Date().toISOString()}</convertedAt>
   <content>
 ${xmlLines}
   </content>
@@ -487,6 +599,10 @@ function convertHtmlToTxt(content: string): string {
   return content
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/h[1-6]>/gi, '\n')
     .replace(/<[^>]*>/g, '')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
@@ -495,6 +611,7 @@ function convertHtmlToTxt(content: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/\s+/g, ' ')
+    .replace(/\n\s+/g, '\n')
     .trim()
 }
 
@@ -503,11 +620,11 @@ function convertCsvToJson(content: string): string {
   if (lines.length === 0) return '[]'
   
   const headers = parseCsvLine(lines[0])
-  const data = lines.slice(1).map(line => {
+  const data = lines.slice(1).map((line, index) => {
     const values = parseCsvLine(line)
-    const obj: any = {}
+    const obj: any = { _rowIndex: index + 1 }
     headers.forEach((header, index) => {
-      obj[header] = values[index] || ''
+      obj[header || `column_${index + 1}`] = values[index] || ''
     })
     return obj
   })
@@ -520,16 +637,17 @@ function convertCsvToXml(content: string): string {
   if (lines.length === 0) return '<?xml version="1.0" encoding="UTF-8"?><data></data>'
   
   const headers = parseCsvLine(lines[0])
-  const xmlRows = lines.slice(1).map(line => {
+  const xmlRows = lines.slice(1).map((line, rowIndex) => {
     const values = parseCsvLine(line)
     const xmlFields = headers.map((header, index) => 
-      `    <${header}>${escapeXml(values[index] || '')}</${header}>`
+      `    <${header || `column_${index + 1}`}>${escapeXml(values[index] || '')}</${header || `column_${index + 1}`}>`
     ).join('\n')
-    return `  <row>\n${xmlFields}\n  </row>`
+    return `  <row id="${rowIndex + 1}">\n${xmlFields}\n  </row>`
   }).join('\n')
   
   return `<?xml version="1.0" encoding="UTF-8"?>
 <data>
+  <convertedAt>${new Date().toISOString()}</convertedAt>
 ${xmlRows}
 </data>`
 }
@@ -552,14 +670,16 @@ function convertCsvToHtml(content: string): string {
     <title>CSV Data</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
-        table { border-collapse: collapse; width: 100%; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         th { background-color: #f2f2f2; font-weight: bold; }
         tr:nth-child(even) { background-color: #f9f9f9; }
+        .info { color: #666; font-size: 0.9em; margin-bottom: 10px; }
     </style>
 </head>
 <body>
     <h1>CSV Data</h1>
+    <div class="info">Converted on: ${new Date().toLocaleString()}</div>
     <table>
         ${headerRow}
         ${dataRows}
@@ -573,7 +693,6 @@ function convertJsonToCsv(content: string): string {
     const data = JSON.parse(content)
     if (!Array.isArray(data)) {
       if (typeof data === 'object' && data !== null) {
-        // Se è un oggetto, prova a convertire le sue proprietà
         const keys = Object.keys(data)
         const values = Object.values(data)
         const csvHeaders = keys.map(k => `"${k}"`).join(',')
@@ -593,7 +712,7 @@ function convertJsonToCsv(content: string): string {
     
     return `${csvHeaders}\n${csvRows}`
   } catch (error) {
-    throw new Error('JSON non valido o formato non supportato')
+    throw new Error('JSON non valido o formato non supportato per la conversione CSV')
   }
 }
 
@@ -602,6 +721,7 @@ function convertJsonToXml(content: string): string {
     const data = JSON.parse(content)
     return `<?xml version="1.0" encoding="UTF-8"?>
 <root>
+  <convertedAt>${new Date().toISOString()}</convertedAt>
 ${jsonToXmlRecursive(data, '  ')}
 </root>`
   } catch (error) {
@@ -619,18 +739,21 @@ function convertJsonToTxt(content: string): string {
 }
 
 function convertXmlToJson(content: string): string {
-  // Conversione XML semplificata - estrae il testo contenuto
   const textContent = content
     .replace(/<\?xml[^>]*\?>/g, '')
     .replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1')
-    .replace(/<[^>]*>/g, '\n')
+    .replace(/<([^>]+)>/g, (match, tag) => {
+      if (tag.startsWith('/')) return '\n'
+      return `\n${tag}: `
+    })
     .split('\n')
     .map(line => line.trim())
     .filter(line => line.length > 0)
   
   return JSON.stringify({ 
     extractedContent: textContent,
-    note: "Conversione semplificata da XML - solo contenuto testuale estratto"
+    convertedAt: new Date().toISOString(),
+    note: "Conversione semplificata da XML - contenuto testuale estratto"
   }, null, 2)
 }
 
@@ -674,7 +797,9 @@ function parseCsvLine(line: string): string[] {
 function jsonToXmlRecursive(obj: any, indent: string): string {
   if (typeof obj === 'object' && obj !== null) {
     if (Array.isArray(obj)) {
-      return obj.map(item => `${indent}<item>\n${jsonToXmlRecursive(item, indent + '  ')}\n${indent}</item>`).join('\n')
+      return obj.map((item, index) => 
+        `${indent}<item index="${index}">\n${jsonToXmlRecursive(item, indent + '  ')}\n${indent}</item>`
+      ).join('\n')
     } else {
       return Object.entries(obj).map(([key, value]) => 
         `${indent}<${key}>\n${jsonToXmlRecursive(value, indent + '  ')}\n${indent}</${key}>`

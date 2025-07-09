@@ -339,11 +339,11 @@ const Index = () => {
         <Alert className="mb-6 border-green-200 bg-green-50">
           <AlertCircle className="h-4 w-4 text-green-600" />
           <AlertDescription className="text-green-800">
-            <strong>✅ Sistema di conversione attivo!</strong> Conversioni supportate:
+            <strong>✅ Sistema di conversione attivo!</strong> 
             <br />
-            <strong>Conversioni semplici:</strong> TXT, HTML, CSV, JSON, XML (sempre disponibili)
+            <strong>Conversioni semplici (sempre disponibili):</strong> TXT ↔ HTML/CSV/JSON/XML, CSV ↔ JSON/XML/HTML, JSON ↔ CSV/XML/TXT, XML ↔ JSON/TXT, HTML → TXT
             <br />
-            <strong>Conversioni avanzate:</strong> PDF, Word, Excel, PowerPoint, immagini (richiedono CloudConvert API)
+            <strong>Conversioni avanzate (richiedono CloudConvert API):</strong> PDF, Word, Excel, PowerPoint, immagini
             <br />
             <strong>Dimensione massima:</strong> 100MB per file
           </AlertDescription>
@@ -519,7 +519,7 @@ const Index = () => {
                     {isProcessing ? (
                       <>
                         <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                        Conversione con CloudConvert...
+                        Conversione in corso...
                       </>
                     ) : (
                       <>
@@ -567,7 +567,7 @@ const Index = () => {
                       </p>
                     </div>
                     <p className="text-green-600 text-sm mt-1">
-                      Conversione completata tramite CloudConvert
+                      Conversione completata con successo
                     </p>
                   </div>
                 )}
