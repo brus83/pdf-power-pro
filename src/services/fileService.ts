@@ -56,7 +56,7 @@ export const convertFile = async (
       console.error('Conversion error details:', error);
       
       // Gestione migliorata degli errori
-      let errorMessage = 'Errore durante la conversione del file';
+      let errorMessage = 'Si è verificato un errore durante la conversione del file. Riprova più tardi.';
       
       if (error.message) {
         errorMessage = error.message;
@@ -78,6 +78,7 @@ export const convertFile = async (
           }
         } catch (parseError) {
           console.error('Failed to parse error body:', parseError);
+          // Mantieni il messaggio user-friendly se il parsing fallisce
         }
       }
       
@@ -94,7 +95,7 @@ export const convertFile = async (
     console.error('File conversion failed:', error);
     return { 
       success: false, 
-      error: error instanceof Error ? error.message : 'Conversione fallita' 
+      error: error instanceof Error ? error.message : 'Conversione fallita. Verifica che il file sia valido e riprova.' 
     };
   }
 };

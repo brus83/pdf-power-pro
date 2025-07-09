@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
     if (!fileContent || !fileName || !targetFormat) {
       console.error('Missing parameters:', { fileContent: !!fileContent, fileName, targetFormat })
       return new Response(
-        JSON.stringify({ error: 'Parametri mancanti' }),
+        JSON.stringify({ error: 'Parametri mancanti: fileContent, fileName e targetFormat sono richiesti' }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -45,12 +45,14 @@ Deno.serve(async (req) => {
       )
     }
 
-    const cloudConvertApiKey = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiMGFlYTMyN2IzOWFkMjRhMjA0NmE0MDMyZDQ5YjBhYWE3ZDYzZTkwYzRmN2Y5Njk2YWI2YjA3OTBlMDFjMDcxYjRhMDU3ZThmZjA1ODJmZDAiLCJpYXQiOjE3NTE5NTk0NzAuMzIzMjU2LCJuYmYiOjE3NTE5NTk0NzAuMzIzMjU3LCJleHAiOjQ5MDc2MzMwNzAuMzE4NzQ2LCJzdWIiOiI3MjM1OTE1NyIsInNjb3BlcyI6WyJ1c2VyLnJlYWQiLCJ1c2VyLndyaXRlIiwidGFzay5yZWFkIiwidGFzay53cml0ZSIsIndlYmhvb2sucmVhZCIsIndlYmhvb2sud3JpdGUiLCJwcmVzZXQucmVhZCIsInByZXNldC53cml0ZSJdfQ.bRuTPzbOMNMX-yXH9IBkHiGBr8eZkhSF4ipuAmFVg_ymE87DQ1W2BwbYi8hFp9CeztgRa2xxbsaa_AtpaxKa_IkIXULQFVOhu5rh3ujLAPwH6X3-W5FD1CQofPhe4HXrLuqrOUvr6IoiiirvBfc3h842VBACzQe6CZvysGRtdub5Re2BPO4gJUNosawI1tXKzxpVp3pEgeQ28DCM7AO9bmSzva-7pCODRS3_RMBg0jTpKP7LDA2TfEKtWWvD-BKk0M-jG5pQeVjqLfhjG1Gu_t0SZdq-c2Q3UIG-H_IegJ0FJ01UqfdQIbxFz9_F5swiMFwU7Jn6XbyeQ-bximoMMInzxP2WtcU8QiwaB3dHSEmEiSHvFdPd7htKLzsgFjBMfqHbdLs4eVwONzlrpAP8Fc4awUBiCOHtzN6jlIrYja-PWEgT7VaJmfoqjlewkIMvNjBN3bG1BzxI-jvLCcHWyub7oI-wwYuL7m1qyTOVZ6n-BdMwmARI7E9c8DCh0MybubicAHsTqKiYYMj2hbNgcfSjdoGGi_MAGRGbWVo3Tl2jOKWTmJmqpv7nkMGbQ9d_4zRKa3DbiBaCmkhpAwLTn_ZQ1AB4qJ2KnHfNVVh5NavKjmCLaEsxaxyqIpHUqhUPELpAiJaF-3A5l7v8PrFiCEGhoChUPHjxrZ_ZZhS8QOA'
+    // CloudConvert API Key - Sostituisci con la tua chiave API valida
+    const cloudConvertApiKey = Deno.env.get('CLOUDCONVERT_API_KEY') || 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiMGFlYTMyN2IzOWFkMjRhMjA0NmE0MDMyZDQ5YjBhYWE3ZDYzZTkwYzRmN2Y5Njk2YWI2YjA3OTBlMDFjMDcxYjRhMDU3ZThmZjA1ODJmZDAiLCJpYXQiOjE3NTE5NTk0NzAuMzIzMjU2LCJuYmYiOjE3NTE5NTk0NzAuMzIzMjU3LCJleHAiOjQ5MDc2MzMwNzAuMzE4NzQ2LCJzdWIiOiI3MjM1OTE1NyIsInNjb3BlcyI6WyJ1c2VyLnJlYWQiLCJ1c2VyLndyaXRlIiwidGFzay5yZWFkIiwidGFzay53cml0ZSIsIndlYmhvb2sucmVhZCIsIndlYmhvb2sud3JpdGUiLCJwcmVzZXQucmVhZCIsInByZXNldC53cml0ZSJdfQ.bRuTPzbOMNMX-yXH9IBkHiGBr8eZkhSF4ipuAmFVg_ymE87DQ1W2BwbYi8hFp9CeztgRa2xxbsaa_AtpaxKa_IkIXULQFVOhu5rh3ujLAPwH6X3-W5FD1CQofPhe4HXrLuqrOUvr6IoiiirvBfc3h842VBACzQe6CZvysGRtdub5Re2BPO4gJUNosawI1tXKzxpVp3pEgeQ28DCM7AO9bmSzva-7pCODRS3_RMBg0jTpKP7LDA2TfEKtWWvD-BKk0M-jG5pQeVjqLfhjG1Gu_t0SZdq-c2Q3UIG-H_IegJ0FJ01UqfdQIbxFz9_F5swiMFwU7Jn6XbyeQ-bximoMMInzxP2WtcU8QiwaB3dHSEmEiSHvFdPd7htKLzsgFjBMfqHbdLs4eVwONzlrpAP8Fc4awUBiCOHtzN6jlIrYja-PWEgT7VaJmfoqjlewkIMvNjBN3bG1BzxI-jvLCcHWyub7oI-wwYuL7m1qyTOVZ6n-BdMwmARI7E9c8DCh0MybubicAHsTqKiYYMj2hbNgcfSjdoGGi_MAGRGbWVo3Tl2jOKWTmJmqpv7nkMGbQ9d_4zRKa3DbiBaCmkhpAwLTn_ZQ1AB4qJ2KnHfNVVh5NavKjmCLaEsxaxyqIpHUqhUPELpAiJaF-3A5l7v8PrFiCEGhoChUPHjxrZ_ZZhS8QOA'
     
-    // Se non c'è la chiave API, usa conversioni semplici per formati di testo
-    if (!cloudConvertApiKey) {
-      console.log('CloudConvert API key not found, using simple conversions')
-      const sourceExt = getExtensionFromFormat(sourceFormat)
+    const sourceExt = getExtensionFromFormat(sourceFormat)
+    
+    // Se non c'è la chiave API o per conversioni semplici, usa conversioni locali
+    if (!cloudConvertApiKey || cloudConvertApiKey.length < 50) {
+      console.log('CloudConvert API key not available, using simple conversions')
       
       if (['txt', 'html', 'csv', 'json', 'xml'].includes(sourceExt) && 
           ['txt', 'html', 'csv', 'json', 'xml'].includes(targetFormat)) {
@@ -92,7 +94,7 @@ Deno.serve(async (req) => {
       } else {
         return new Response(
           JSON.stringify({ 
-            error: 'CloudConvert API key non configurata. Per conversioni PDF, Office e immagini è necessaria la configurazione di CloudConvert.' 
+            error: 'CloudConvert API key non configurata. Per conversioni PDF, Office e immagini è necessaria la configurazione di CloudConvert. Attualmente supportate solo conversioni tra formati di testo (TXT, HTML, CSV, JSON, XML).' 
           }),
           { 
             status: 400, 
@@ -103,12 +105,22 @@ Deno.serve(async (req) => {
     }
 
     console.log('Starting CloudConvert conversion')
-    console.log('Using API key (first 10 chars):', cloudConvertApiKey.substring(0, 10))
     
     try {
       // Converti il contenuto base64 in Uint8Array per l'upload
-      const binaryData = Uint8Array.from(atob(fileContent), c => c.charCodeAt(0))
-      const sourceExt = getExtensionFromFormat(sourceFormat)
+      let binaryData: Uint8Array
+      try {
+        binaryData = Uint8Array.from(atob(fileContent), c => c.charCodeAt(0))
+      } catch (decodeError) {
+        console.error('Base64 decode error:', decodeError)
+        return new Response(
+          JSON.stringify({ error: 'Errore nella decodifica del file. Assicurati che il file sia valido.' }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
       
       // Crea un job di conversione con la struttura corretta
       const jobPayload = {
@@ -120,14 +132,12 @@ Deno.serve(async (req) => {
             operation: 'convert',
             input: 'upload-file',
             output_format: targetFormat,
-            // Opzioni specifiche per PDF to PPT
+            // Opzioni specifiche per migliorare la conversione
             ...(sourceExt === 'pdf' && targetFormat === 'pptx' && {
-              engine: 'office',
-              engine_version: '2019'
+              engine: 'office'
             }),
-            // Opzioni per migliorare la qualità
-            ...(targetFormat === 'pptx' && {
-              optimize_for: 'size'
+            ...(targetFormat === 'pdf' && {
+              engine: 'office'
             })
           },
           'export-file': {
@@ -148,14 +158,24 @@ Deno.serve(async (req) => {
         body: JSON.stringify(jobPayload)
       })
 
-      const jobResponseText = await jobResponse.text()
-      console.log('Job response status:', jobResponse.status)
-      console.log('Job response:', jobResponseText)
-
       if (!jobResponse.ok) {
-        console.error('CloudConvert job creation failed:', jobResponseText)
+        const jobResponseText = await jobResponse.text()
+        console.error('CloudConvert job creation failed:', jobResponse.status, jobResponseText)
+        
+        let errorMessage = 'Errore nella creazione del job di conversione'
+        try {
+          const errorData = JSON.parse(jobResponseText)
+          if (errorData.message) {
+            errorMessage = errorData.message
+          } else if (errorData.error) {
+            errorMessage = errorData.error
+          }
+        } catch (parseError) {
+          console.error('Could not parse error response:', parseError)
+        }
+        
         return new Response(
-          JSON.stringify({ error: `Errore CloudConvert: ${jobResponse.status} - ${jobResponseText}` }),
+          JSON.stringify({ error: `CloudConvert Error: ${errorMessage}` }),
           { 
             status: 500, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -163,17 +183,23 @@ Deno.serve(async (req) => {
         )
       }
 
-      const jobData = JSON.parse(jobResponseText)
+      const jobData = await jobResponse.json()
       console.log('Job created successfully:', jobData.data.id)
 
       // Upload del file
       const uploadTask = jobData.data.tasks.find((task: any) => task.name === 'upload-file')
       if (!uploadTask || !uploadTask.result?.form) {
         console.error('Upload task not found or invalid:', uploadTask)
-        throw new Error('Task di upload non trovato o non valido')
+        return new Response(
+          JSON.stringify({ error: 'Task di upload non trovato. Riprova.' }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
       }
 
-      console.log('Uploading file to:', uploadTask.result.form.url)
+      console.log('Uploading file to CloudConvert...')
 
       const formData = new FormData()
       Object.entries(uploadTask.result.form.parameters).forEach(([key, value]) => {
@@ -189,16 +215,22 @@ Deno.serve(async (req) => {
 
       if (!uploadResponse.ok) {
         const uploadError = await uploadResponse.text()
-        console.error('Upload failed:', uploadError)
-        throw new Error(`Errore durante l'upload: ${uploadResponse.status}`)
+        console.error('Upload failed:', uploadResponse.status, uploadError)
+        return new Response(
+          JSON.stringify({ error: `Errore durante l'upload del file: ${uploadResponse.status}` }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
       }
 
-      console.log('File uploaded successfully')
+      console.log('File uploaded successfully, waiting for conversion...')
 
       // Attendi il completamento della conversione
       let jobStatus = 'waiting'
       let attempts = 0
-      const maxAttempts = 60 // 10 minuti di attesa massima per conversioni complesse
+      const maxAttempts = 60 // 10 minuti di attesa massima
       
       while (jobStatus !== 'finished' && jobStatus !== 'error' && attempts < maxAttempts) {
         await new Promise(resolve => setTimeout(resolve, 10000)) // Attendi 10 secondi
@@ -212,26 +244,46 @@ Deno.serve(async (req) => {
         if (statusResponse.ok) {
           const statusData = await statusResponse.json()
           jobStatus = statusData.data.status
-          console.log(`Job status: ${jobStatus} (attempt ${attempts + 1})`)
+          console.log(`Job status: ${jobStatus} (attempt ${attempts + 1}/${maxAttempts})`)
           
           if (statusData.data.tasks) {
             const errorTask = statusData.data.tasks.find((task: any) => task.status === 'error')
             if (errorTask) {
               console.error('Task error:', errorTask)
-              throw new Error(`Errore nella conversione: ${errorTask.message || 'Errore sconosciuto'}`)
+              return new Response(
+                JSON.stringify({ error: `Errore nella conversione: ${errorTask.message || 'Formato non supportato o file corrotto'}` }),
+                { 
+                  status: 400, 
+                  headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+                }
+              )
             }
           }
+        } else {
+          console.error('Status check failed:', statusResponse.status)
         }
         
         attempts++
       }
 
       if (jobStatus === 'error') {
-        throw new Error('Errore durante la conversione del file')
+        return new Response(
+          JSON.stringify({ error: 'Errore durante la conversione del file. Verifica che il formato sia supportato.' }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
       }
 
       if (jobStatus !== 'finished') {
-        throw new Error('Timeout durante la conversione del file')
+        return new Response(
+          JSON.stringify({ error: 'Timeout durante la conversione del file. Il file potrebbe essere troppo grande o complesso.' }),
+          { 
+            status: 408, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
       }
 
       // Ottieni il link di download
@@ -241,12 +293,29 @@ Deno.serve(async (req) => {
         }
       })
 
+      if (!finalJobResponse.ok) {
+        console.error('Final job status check failed:', finalJobResponse.status)
+        return new Response(
+          JSON.stringify({ error: 'Errore nel recupero del file convertito' }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+
       const finalJobData = await finalJobResponse.json()
       const exportTask = finalJobData.data.tasks.find((task: any) => task.name === 'export-file')
       
       if (!exportTask?.result?.files?.[0]?.url) {
         console.error('Export task result:', exportTask)
-        throw new Error('File convertito non trovato')
+        return new Response(
+          JSON.stringify({ error: 'File convertito non trovato. La conversione potrebbe essere fallita.' }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
       }
 
       const downloadUrl = exportTask.result.files[0].url
@@ -344,7 +413,7 @@ async function performSimpleConversion(
     if (!conversion) {
       return { 
         success: false, 
-        error: `Conversione da ${sourceExt} a ${targetFormat} non supportata senza CloudConvert API` 
+        error: `Conversione da ${sourceExt.toUpperCase()} a ${targetFormat.toUpperCase()} non supportata senza CloudConvert API. Formati supportati: TXT, HTML, CSV, JSON, XML` 
       }
     }
 
@@ -353,7 +422,7 @@ async function performSimpleConversion(
     const mimeType = getMimeType(targetFormat)
     const dataUrl = `data:${mimeType};base64,${base64Content}`
 
-    console.log('Conversion completed successfully')
+    console.log('Simple conversion completed successfully')
     return {
       success: true,
       downloadUrl: dataUrl,
@@ -366,7 +435,7 @@ async function performSimpleConversion(
   }
 }
 
-// Funzioni di conversione semplici (mantenute per compatibilità)
+// Funzioni di conversione semplici
 function convertTxtToHtml(content: string): string {
   const lines = content.split('\n')
   const htmlContent = lines.map(line => `<p>${escapeHtml(line)}</p>`).join('\n')
@@ -375,6 +444,10 @@ function convertTxtToHtml(content: string): string {
 <head>
     <meta charset="UTF-8">
     <title>Converted Document</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+        p { margin: 10px 0; }
+    </style>
 </head>
 <body>
     ${htmlContent}
@@ -389,7 +462,13 @@ function convertTxtToCsv(content: string): string {
 
 function convertTxtToJson(content: string): string {
   const lines = content.split('\n').filter(line => line.trim())
-  return JSON.stringify({ lines }, null, 2)
+  return JSON.stringify({ 
+    document: {
+      title: "Converted Text Document",
+      lines: lines,
+      totalLines: lines.length
+    }
+  }, null, 2)
 }
 
 function convertTxtToXml(content: string): string {
@@ -397,18 +476,25 @@ function convertTxtToXml(content: string): string {
   const xmlLines = lines.map((line, index) => `  <line id="${index + 1}">${escapeXml(line)}</line>`).join('\n')
   return `<?xml version="1.0" encoding="UTF-8"?>
 <document>
+  <title>Converted Text Document</title>
+  <content>
 ${xmlLines}
+  </content>
 </document>`
 }
 
 function convertHtmlToTxt(content: string): string {
   return content
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<[^>]*>/g, '')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
     .trim()
 }
 
@@ -465,12 +551,15 @@ function convertCsvToHtml(content: string): string {
     <meta charset="UTF-8">
     <title>CSV Data</title>
     <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
         table { border-collapse: collapse; width: 100%; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
     </style>
 </head>
 <body>
+    <h1>CSV Data</h1>
     <table>
         ${headerRow}
         ${dataRows}
@@ -482,9 +571,19 @@ function convertCsvToHtml(content: string): string {
 function convertJsonToCsv(content: string): string {
   try {
     const data = JSON.parse(content)
-    if (!Array.isArray(data) || data.length === 0) {
-      return ''
+    if (!Array.isArray(data)) {
+      if (typeof data === 'object' && data !== null) {
+        // Se è un oggetto, prova a convertire le sue proprietà
+        const keys = Object.keys(data)
+        const values = Object.values(data)
+        const csvHeaders = keys.map(k => `"${k}"`).join(',')
+        const csvValues = values.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+        return `${csvHeaders}\n${csvValues}`
+      }
+      return 'value\n"' + String(data).replace(/"/g, '""') + '"'
     }
+    
+    if (data.length === 0) return ''
     
     const headers = Object.keys(data[0])
     const csvHeaders = headers.map(h => `"${h}"`).join(',')
@@ -494,7 +593,7 @@ function convertJsonToCsv(content: string): string {
     
     return `${csvHeaders}\n${csvRows}`
   } catch (error) {
-    throw new Error('JSON non valido')
+    throw new Error('JSON non valido o formato non supportato')
   }
 }
 
@@ -520,19 +619,26 @@ function convertJsonToTxt(content: string): string {
 }
 
 function convertXmlToJson(content: string): string {
-  // Conversione XML semplificata
-  const lines = content.split('\n')
-  const textContent = lines
-    .filter(line => !line.trim().startsWith('<?') && !line.trim().startsWith('<'))
+  // Conversione XML semplificata - estrae il testo contenuto
+  const textContent = content
+    .replace(/<\?xml[^>]*\?>/g, '')
+    .replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1')
+    .replace(/<[^>]*>/g, '\n')
+    .split('\n')
     .map(line => line.trim())
     .filter(line => line.length > 0)
   
-  return JSON.stringify({ content: textContent }, null, 2)
+  return JSON.stringify({ 
+    extractedContent: textContent,
+    note: "Conversione semplificata da XML - solo contenuto testuale estratto"
+  }, null, 2)
 }
 
 function convertXmlToTxt(content: string): string {
   return content
-    .replace(/<[^>]*>/g, '')
+    .replace(/<\?xml[^>]*\?>/g, '')
+    .replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1')
+    .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -612,7 +718,10 @@ function getExtensionFromFormat(format: string): string {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
       'application/msword': 'doc',
       'application/vnd.ms-powerpoint': 'ppt',
-      'application/vnd.ms-excel': 'xls'
+      'application/vnd.ms-excel': 'xls',
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/gif': 'gif'
     }
     return mapping[format] || format.split('/')[1]
   }
@@ -642,4 +751,8 @@ function getContentType(format: string): string {
     'webp': 'image/webp'
   }
   return contentTypes[format] || 'application/octet-stream'
+}
+
+function getMimeType(format: string): string {
+  return getContentType(format)
 }

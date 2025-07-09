@@ -339,11 +339,13 @@ const Index = () => {
         <Alert className="mb-6 border-green-200 bg-green-50">
           <AlertCircle className="h-4 w-4 text-green-600" />
           <AlertDescription className="text-green-800">
-            <strong>✅ CloudConvert integrato!</strong> Ora puoi convertire tutti i formati di file inclusi PDF, Word, Excel, PowerPoint, immagini e molto altro.
+            <strong>✅ Sistema di conversione attivo!</strong> Conversioni supportate:
+            <br />
+            <strong>Conversioni semplici:</strong> TXT, HTML, CSV, JSON, XML (sempre disponibili)
+            <br />
+            <strong>Conversioni avanzate:</strong> PDF, Word, Excel, PowerPoint, immagini (richiedono CloudConvert API)
             <br />
             <strong>Dimensione massima:</strong> 100MB per file
-            <br />
-            <strong>Formati supportati:</strong> PDF, DOCX, XLSX, PPTX, JPG, PNG, GIF, HTML, TXT, CSV, JSON, XML, RTF, ODT e molti altri
           </AlertDescription>
         </Alert>
 
